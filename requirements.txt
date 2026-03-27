@@ -1,0 +1,10 @@
+Flask
+Flask-SQLAlchemy
+python-dotenv
+openai
+twilio
+stripe
+gunicorn
+reportlab
+psycopg2-binary
+SQLAlchemy
