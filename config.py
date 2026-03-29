@@ -3,14 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+database_url = os.getenv("DATABASE_URL", "sqlite:///achex_ai_ledger.db")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///achex_ai_ledger.db")
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-    TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-    TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
-    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+
+    SQLALCHEMY_DATABASE_URI = database_url
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
