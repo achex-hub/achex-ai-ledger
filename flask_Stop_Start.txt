@@ -1,0 +1,4 @@
+CTRL + C
+python app.py
+
+Browser achex Plan Upgrade Link: Pro = "http://127.0.0.1:5000/admin/set-plan?phone=whatsapp:%2B17024939766&plan=pro" , Starter = "http://127.0.0.1:5000/admin/set-plan?phone=whatsapp:%2B17024939766&plan=starter"

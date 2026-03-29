@@ -36,6 +36,8 @@ db.init_app(app)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
+with app.app_context():
+    db.create_all()
 
 @app.route("/")
 def home():
@@ -396,6 +398,4 @@ def download_export(filename):
     return send_from_directory("exports", filename, as_attachment=True)
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
