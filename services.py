@@ -22,7 +22,7 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
 PLAN_LIMITS = {
-    "free": 50,      # keep 2 while testing
+    "free": 20,      # keep 2 while testing
     "starter": 500,
     "pro": 9999999,
 }
@@ -82,7 +82,7 @@ def get_or_create_user(phone_number: str) -> User:
 
 def user_can_add_transaction(user: User) -> bool:
     limit = PLAN_LIMITS.get(user.plan, 50)
-    return user.monthly_transaction_count < limit
+    return (user.monthly_transaction_count + 1) <= limit
 
 
 def normalize_text(text: str) -> str:

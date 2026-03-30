@@ -125,7 +125,11 @@ def whatsapp_webhook():
         return str(resp)
 
     if not user_can_add_transaction(user):
-        msg.body(upgrade_message(user))
+        msg.body(
+            "You've reached your monthly limit.\n\n"
+            "Upgrade to continue using Achex AI Ledger.\n\n"
+            + upgrade_message(user)
+        )
         return str(resp)
 
     export_result = parse_export_command(incoming_message)
