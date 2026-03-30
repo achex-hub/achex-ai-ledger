@@ -68,9 +68,9 @@ def whatsapp_webhook():
 
     if user.monthly_transaction_count >= 0.8 * limit and user.monthly_transaction_count < limit:
         msg.body(
-            "You're close to your monthly limit.\n\n"
+            "You're close to your monthly limit.\n"
             "Don't lose your tracking progress.\n"
-            "Upgrade now to continue without interruption."
+            "Upgrade now to continue without interruption.\n\n"
         )
     
     print("Current user plan:", user.plan)
@@ -127,7 +127,7 @@ def whatsapp_webhook():
     if not user_can_add_transaction(user):
         msg.body(
             "You've reached your monthly limit.\n\n"
-            "Upgrade to continue using Achex AI Ledger.\n\n"
+            "Upgrade to continue using achex AI Ledger.\n\n"
             + upgrade_message(user)
         )
         return str(resp)
