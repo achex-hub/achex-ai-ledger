@@ -300,7 +300,7 @@ def stripe_webhook():
         session = event["data"]["object"]
 
         phone = session.client_reference_id
-        metadata = session.metadata or {}
+        metadata = dict(session.metadata) if session.metadata else {}
         plan = metadata.get("plan", "pro")
 
         print("Stripe payment received:", phone, plan)
@@ -313,10 +313,10 @@ def stripe_webhook():
                 user.monthly_transaction_count = 0
                 db.session.commit()
                 print("User upgraded automatically:", user.phone_number, user.plan)
-            else:
-                print("No user found for phone:", phone)
         else:
-            print("No client_reference_id found in Stripe session")
+            print("No user found for phone:", phone)
+    else:
+        print("No client_reference_id found in Stripe session")
 
     return {"status": "success"}
 
