@@ -347,23 +347,16 @@ def format_summary_message(summary: dict, label: str = "Summary") -> str:
 def help_message() -> str:
     return (
         "Welcome to achex AI Ledger.\n\n"
-        "Track your business with simple WhatsApp messages:\n\n"
+        "Track your business by sending simple WhatsApp messages.\n\n"
         "Examples:\n"
         "- Sold coffee 10\n"
         "- Bought milk 5\n\n"
-        "Get summaries anytim:\n"
+        "Useful commands:\n"
         "- summary\n"
         "- week\n"
         "- month\n"
-        "- year\n"
-        "- last 7 days\n"
-        "- last 30 days\n"
-        "- summary 2026-03-01 to 2026-03-24\n\n"
-        "Export in PDF and CSV:\n"
-        "- export csv month\n"
-        "- export pdf month\n"
-        "- export csv 2026-03-01 to 2026-03-24\n"
-        "- export pdf 2026-03-01 to 2026-03-24\n"
+        "- export csv month\n\n"
+        "Send your first transaction now."
     )
 
 def reset_monthly_usage_if_needed(user: User):
@@ -388,10 +381,10 @@ def upgrade_message(user: User) -> str:
 
     return (
         "You've reached your free limit.\n\n"
-        "Upgrade in seconds:\n\n"
-        f"Starter ($9/month): {starter_link}\n"
-        f"Pro ($29/month): {pro_link}\n\n"
-        "No app. No setup. Just keep tracking your business."
+        "Keep tracking your business without interruption:\n\n"
+        f"Starter — $9/month\n{starter_link}\n\n"
+        f"Pro — $29/month\n{pro_link}\n\n"
+        "No app. No spreadsheets. Just send messages on WhatsApp."
     )
 
 def export_transactions_csv(user: User, start_dt: datetime, end_dt: datetime) -> str:

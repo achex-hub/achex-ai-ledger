@@ -300,7 +300,7 @@ def stripe_webhook():
         session = event["data"]["object"]
 
         phone = session.client_reference_id
-        metadata = session.metadata) or {}
+        metadata = session.metadata or {}
         plan = metadata.get("plan", "pro")
 
         print("Stripe payment received:", phone, plan)
