@@ -1,3 +1,4 @@
+#app.py
 from flask import Flask, request, redirect, send_from_directory
 from twilio.twiml.messaging_response import MessagingResponse
 from datetime import datetime, timezone, timedelta
@@ -28,6 +29,7 @@ from services import (
     export_transactions_csv,
     export_summary_pdf,
     parse_export_command,
+    handle_general_question,
 )
 
 app = Flask(__name__)
@@ -42,7 +44,6 @@ with app.app_context():
 @app.route("/")
 def home():
     return {"status": "ok", "app": "achex AI Ledger"}
-
 
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp_webhook():
@@ -64,15 +65,6 @@ def whatsapp_webhook():
 
     normalized = normalize_text(incoming_message)
 
-    limit = PLAN_LIMITS.get(user.plan, 50)
-
-    if user.monthly_transaction_count >= 0.8 * limit and user.monthly_transaction_count < limit:
-        msg.body(
-            "You're close to your monthly limit.\n"
-            "Don't lose your tracking progress.\n"
-            "Upgrade now to continue without interruption.\n\n"
-        )
-    
     print("Current user plan:", user.plan)
     print("Current monthly count:", user.monthly_transaction_count)
 
@@ -122,14 +114,6 @@ def whatsapp_webhook():
         summary = get_summary_for_range(user, start_dt, end_dt)
         label = f"Summary: {start_dt.date()} to {(end_dt - timedelta(days=1)).date()}"
         msg.body(format_summary_message(summary, label))
-        return str(resp)
-
-    if not user_can_add_transaction(user):
-        msg.body(
-            "You've reached your monthly limit.\n\n"
-            "Upgrade to continue using achex AI Ledger.\n\n"
-            + upgrade_message(user)
-        )
         return str(resp)
 
     export_result = parse_export_command(incoming_message)
@@ -189,20 +173,72 @@ def whatsapp_webhook():
             msg.body(f"Your PDF export is ready:\n{file_url}")
             return str(resp)
 
+    if any(phrase in normalized for phrase in [
+        "how does this work",
+        "how it works",
+        "how does it work",
+        "how to use",
+        "how do i use",
+        "what is this",
+        "what does this do"
+    ]):
+        msg.body(
+            "📘 Here's how it works:\n\n"
+            "Just send messages like:\n"
+            "• Sold coffee 10\n"
+            "• Bought sugar 5\n\n"
+            "Then type:\n"
+            "• summary\n"
+            "• week\n"
+            "• month\n\n"
+            "That's it — no spreadsheets needed."
+        )
+        return str(resp)
+
+    if any(word in normalized for word in ["price", "cost", "pricing"]):
+        msg.body(
+            "💰 Pricing:\n\n"
+            "Free – limited usage\n"
+            "Starter – $9/month\n"
+            "Pro – $29/month\n\n"
+            "Upgrade anytime inside WhatsApp."
+        )
+        return str(resp)
+
+    if "how" in normalized:
+        msg.body(
+            "📘 You can track your business like this:\n\n"
+            "• Sold coffee 10\n"
+            "• Bought milk 5\n"
+            "• summary\n\n"
+            "Try one now 👇"
+        )
+        return str(resp)
+
+    if not user_can_add_transaction(user):
+        msg.body(
+            "You've reached your monthly limit.\n\n"
+            "Upgrade to continue using achex AI Ledger.\n\n"
+            + upgrade_message(user)
+        )
+        return str(resp)
+
     parsed = parse_transaction_with_ai(incoming_message)
     print("Parsed transaction:", parsed)
 
     if parsed.get("transaction_type") not in ["income", "expense"]:
-        msg.body(
-            "Sorry, I could not understand that.\n\n"
-            "Try:\n- Sold coffee 10\n- Bought milk 5\n- summary"
-        )
+        ai_reply = handle_general_question(user, incoming_message)
+        msg.body(ai_reply)
         return str(resp)
 
     if not parsed.get("item") or float(parsed.get("total", 0) or 0) <= 0:
         msg.body(
-            "I need a valid item and amount.\n\n"
-            "Example:\n- Sold bread 20\n- Bought sugar 8"
+            "I didn't catch that 👀\n\n"
+            "Try:\n"
+            "• Sold coffee 10\n"
+            "• Bought milk 5\n"
+            "• summary\n\n"
+            "Or type help"
         )
         return str(resp)
 
@@ -213,7 +249,6 @@ def whatsapp_webhook():
         "You're tracking your business in real time."
     )
     return str(resp)
-
 
 @app.route("/pricing")
 def pricing():
@@ -313,10 +348,10 @@ def stripe_webhook():
                 user.monthly_transaction_count = 0
                 db.session.commit()
                 print("User upgraded automatically:", user.phone_number, user.plan)
+            else:
+                print("No user found for phone:", phone)
         else:
-            print("No user found for phone:", phone)
-    else:
-        print("No client_reference_id found in Stripe session")
+            print("No client_reference_id found in Stripe session")
 
     return {"status": "success"}
 

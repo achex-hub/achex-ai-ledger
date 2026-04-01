@@ -1,3 +1,4 @@
+# services.py
 import os
 import json
 import stripe
@@ -22,7 +23,7 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
 PLAN_LIMITS = {
-    "free": 20,      # keep 2 while testing
+    "free": 50,      # keep 2 while testing
     "starter": 500,
     "pro": 9999999,
 }
@@ -359,34 +360,6 @@ def help_message() -> str:
         "Send your first transaction now."
     )
 
-def reset_monthly_usage_if_needed(user: User):
-    now = datetime.now(timezone.utc)
-
-    if not user.last_reset_date:
-        user.last_reset_date = now
-        db.session.commit()
-        return
-
-    if now.month != user.last_reset_date.month or now.year != user.last_reset_date.year:
-        user.monthly_transaction_count = 0
-        user.last_reset_date = now
-        db.session.commit()
-
-
-def upgrade_message(user: User) -> str:
-    base_url = os.getenv("APP_BASE_URL")
-
-    starter_link = f"{base_url}/upgrade/starter/{user.phone_number}"
-    pro_link = f"{base_url}/upgrade/pro/{user.phone_number}"
-
-    return (
-        "You've reached your free limit.\n\n"
-        "Keep tracking your business without interruption:\n\n"
-        f"Starter — $9/month\n{starter_link}\n\n"
-        f"Pro — $29/month\n{pro_link}\n\n"
-        "No app. No spreadsheets. Just send messages on WhatsApp."
-    )
-
 def export_transactions_csv(user: User, start_dt: datetime, end_dt: datetime) -> str:
     transactions = get_transactions_for_range(user, start_dt, end_dt)
 
@@ -491,3 +464,58 @@ def parse_export_command(text: str):
         return None
 
     return export_type, period
+
+def reset_monthly_usage_if_needed(user: User):
+    now = datetime.now(timezone.utc)
+
+    if not user.last_reset_date:
+        user.last_reset_date = now
+        db.session.commit()
+        return
+
+    if now.month != user.last_reset_date.month or now.year != user.last_reset_date.year:
+        user.monthly_transaction_count = 0
+        user.last_reset_date = now
+        db.session.commit()
+
+def upgrade_message(user: User) -> str:
+    base_url = os.getenv("APP_BASE_URL")
+
+    starter_link = f"{base_url}/upgrade/starter/{user.phone_number}"
+    pro_link = f"{base_url}/upgrade/pro/{user.phone_number}"
+
+    return (
+        "You've reached your free limit.\n\n"
+        "Keep tracking your business without interruption:\n\n"
+        f"Starter — $9/month\n{starter_link}\n\n"
+        f"Pro — $29/month\n{pro_link}\n\n"
+        "No app. No spreadsheets. Just send messages on WhatsApp."
+    )
+
+def handle_general_question(user, message: str) -> str:
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an assistant for achex AI Ledger. "
+                        "Help small business owners understand how to use the app. "
+                        "Be concise, practical, and friendly. "
+                        "Do NOT hallucinate features."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": message
+                }
+            ],
+            max_tokens=120
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        print("AI fallback error:", str(e))
+        return "Type 'help' to see what you can do."
