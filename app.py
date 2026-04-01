@@ -195,7 +195,7 @@ def whatsapp_webhook():
         )
         return str(resp)
 
-    if any(word in normalized for word in ["price", "cost", "pricing"]):
+    if any(word in normalized for word in ["price", "cost", "pricing", "how much"]):
         msg.body(
             "💰 Pricing:\n\n"
             "Free – limited usage\n"
@@ -211,7 +211,7 @@ def whatsapp_webhook():
             "• Sold coffee 10\n"
             "• Bought milk 5\n"
             "• summary\n\n"
-            "Try one now 👇"
+            "Try one now for FREE 👇"
         )
         return str(resp)
 
