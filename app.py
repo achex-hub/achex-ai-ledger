@@ -238,7 +238,7 @@ def whatsapp_webhook():
         return str(resp)
 
     if not user_can_add_transaction(user):
-        upgrade_link = generate_upgrade_link(from_number, ["starter"], ["pro"])
+        upgrade_link = generate_upgrade_link(from_number, "starter"), (from_number, "pro")
 
         msg.body(
             "🚫 You've reached your monthly limit.\n\n"
