@@ -389,39 +389,34 @@ def stripe_webhook():
             payload, sig_header, endpoint_secret
         )
     except Exception as e:
-        print("Webhook error:", e)
-        return "Invalid payload", 400
+        print("Webhook error:", str(e))
+        return {"error": str(e)}, 400
 
     print("EVENT TYPE:", event["type"])
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        # ✅ FIX: use dot notation, not .get()
         phone = session.client_reference_id
+        metadata = dict(session.metadata) if session.metadata else {}
+        plan = metadata["plan"] if "plan" in metadata else "starter"
 
-        # metadata may or may not exist
-        metadata = session.metadata or {}
-        plan = metadata.get("plan", "starter")
+        print("Stripe payment received:", phone, plan)
 
-        print("Webhook upgrade:", phone, plan)
+        if phone:
+            user = User.query.filter_by(phone_number=phone).first()
 
-        user = User.query.filter_by(phone_number=phone).first()
+            if user:
+                user.plan = plan
+                user.monthly_transaction_count = 0
+                db.session.commit()
+                print("User upgraded automatically:", user.phone_number, user.plan)
+            else:
+                print("No user found for phone:", phone)
+        else:
+            print("No client_reference_id found in Stripe session")
 
-        if user:
-            user.plan = plan
-            db.session.commit()
-
-            print("User upgraded:", user.phone_number, user.plan)
-
-            # send confirmation (Step 2)
-            send_whatsapp_message(
-                phone,
-                f"✅ You're now on {plan.upper()} plan.\n\n"
-                "Unlimited tracking unlocked 🚀"
-            )
-
-    return "OK", 200
+    return {"status": "success"}
 
 
 @app.route("/stripe-success")
