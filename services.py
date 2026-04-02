@@ -505,6 +505,10 @@ def upgrade_message(user: User) -> str:
         "No app. No spreadsheets. Just send messages on WhatsApp."
     )
 
+def generate_upgrade_link(phone, plan):
+    base_url = os.getenv("APP_BASE_URL")
+    return f"{base_url}/upgrade/{plan}/{phone}"
+
 def handle_general_question(user, message: str) -> str:
     try:
         response = client.chat.completions.create(
@@ -528,10 +532,6 @@ def handle_general_question(user, message: str) -> str:
         )
 
         return response.choices[0].message.content.strip()
-
-def generate_upgrade_link(phone, plan):
-    base_url = os.getenv("APP_BASE_URL")
-    return f"{base_url}/upgrade/{plan}/{phone}"
 
     except Exception as e:
         print("AI fallback error:", str(e))
