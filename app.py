@@ -30,6 +30,7 @@ from services import (
     export_summary_pdf,
     parse_export_command,
     handle_general_question,
+    generate_upgrade_link,
 )
 
 app = Flask(__name__)
