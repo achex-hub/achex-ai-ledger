@@ -397,9 +397,12 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        phone = session.client_reference_id
-        metadata = dict(session.metadata) if session.metadata else {}
-        plan = metadata["plan"] if "plan" in metadata else "starter"
+        # Convert Stripe object to normal Python dict safely
+        session_data = session.to_dict_recursive()
+
+        phone = session_data.get("client_reference_id")
+        metadata = session_data.get("metadata", {}) or {}
+        plan = metadata.get("plan", "starter")
 
         print("Stripe payment received:", phone, plan)
 
@@ -417,7 +420,6 @@ def stripe_webhook():
             print("No client_reference_id found in Stripe session")
 
     return {"status": "success"}
-
 
 @app.route("/stripe-success")
 def stripe_success():
