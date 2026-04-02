@@ -419,6 +419,8 @@ def stripe_webhook():
             print("No client_reference_id found in Stripe session")
 
     return {"status": "success"}
+
+
 @app.route("/stripe-success")
 def stripe_success():
     return """
