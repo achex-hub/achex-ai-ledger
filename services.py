@@ -14,6 +14,19 @@ from models import db, User, Transaction
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from twilio.rest import Client
+
+def send_whatsapp_message(to_number, message):
+    client = Client(
+        os.getenv("TWILIO_ACCOUNT_SID"),
+        os.getenv("TWILIO_AUTH_TOKEN")
+    )
+
+    client.messages.create(
+        from_=f"whatsapp:{os.getenv('TWILIO_WHATSAPP_NUMBER')}",
+        body=message,
+        to=to_number
+    )
 
 EXPORT_DIR = Path("exports")
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -515,6 +528,10 @@ def handle_general_question(user, message: str) -> str:
         )
 
         return response.choices[0].message.content.strip()
+
+def generate_upgrade_link(phone, plan):
+    base_url = os.getenv("APP_BASE_URL")
+    return f"{base_url}/upgrade/{plan}/{phone}"
 
     except Exception as e:
         print("AI fallback error:", str(e))

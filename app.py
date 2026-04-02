@@ -68,6 +68,15 @@ def whatsapp_webhook():
     print("Current user plan:", user.plan)
     print("Current monthly count:", user.monthly_transaction_count)
 
+    if normalized in ["upgrade starter", "upgrade pro"]:
+        plan = normalized.split()[1]
+        link = generate_upgrade_link(from_number, plan)
+
+        msg.body(
+            f"Upgrade to {plan.upper()}:\n{link}"
+        )
+        return str(resp)
+
     if normalized == "help":
         msg.body(help_message())
         return str(resp)
@@ -207,11 +216,13 @@ def whatsapp_webhook():
 
     if any(word in normalized for word in ["price", "cost", "pricing"]):
         msg.body(
-            "💰 Pricing:\n\n"
-            "Free – limited usage\n"
-            "Starter – $9/month\n"
-            "Pro – $29/month\n\n"
-            "Upgrade anytime inside WhatsApp."
+            "💰 Plans:\n\n"
+            "Free → Try it\n"
+            "Starter → $9/month (for daily use)\n"
+            "Pro → $29/month (full business)\n\n"
+            "Upgrade instantly:\n"
+            "👉 type 'upgrade starter'\n"
+            "👉 type 'upgrade pro'"
         )
         return str(resp)
 
@@ -226,10 +237,13 @@ def whatsapp_webhook():
         return str(resp)
 
     if not user_can_add_transaction(user):
+        upgrade_link = generate_upgrade_link(from_number, "starter")
+
         msg.body(
-            "You've reached your monthly limit.\n\n"
-            "Upgrade to continue using achex AI Ledger.\n\n"
-            + upgrade_message(user)
+            "🚫 You've reached your monthly limit.\n\n"
+            "Upgrade now to continue:\n"
+            f"{upgrade_link}\n\n"
+            "Takes 10 seconds."
         )
         return str(resp)
 
@@ -254,9 +268,19 @@ def whatsapp_webhook():
 
     transaction = save_transaction(user, parsed, incoming_message)
 
+    invite_line = ""
+
+    if user.monthly_transaction_count % 5 == 0:
+        invite_line = (
+            "\n\n🔥 You're tracking like a pro.\n"
+            "Invite a friend:\n"
+            f"https://wa.me/{os.getenv('PUBLIC_WHATSAPP_NUMBER')}"
+        )
+
     msg.body(
         f"Recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
         "You're tracking your business in real time."
+        + invite_line
     )
     return str(resp)
 
@@ -336,34 +360,39 @@ def stripe_webhook():
             payload, sig_header, endpoint_secret
         )
     except Exception as e:
-        print("Stripe webhook error:", str(e))
-        return {"error": str(e)}, 400
-    
+        print("Webhook error:", e)
+        return "Invalid payload", 400
+
     print("EVENT TYPE:", event["type"])
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
+        # ✅ FIX: use dot notation, not .get()
         phone = session.client_reference_id
-        metadata = dict(session.metadata) if session.metadata else {}
-        plan = metadata.get("plan", "pro")
 
-        print("Stripe payment received:", phone, plan)
+        # metadata may or may not exist
+        metadata = session.metadata or {}
+        plan = metadata.get("plan", "starter")
 
-        if phone:
-            user = User.query.filter_by(phone_number=phone).first()
+        print("Webhook upgrade:", phone, plan)
 
-            if user:
-                user.plan = plan
-                user.monthly_transaction_count = 0
-                db.session.commit()
-                print("User upgraded automatically:", user.phone_number, user.plan)
-            else:
-                print("No user found for phone:", phone)
-        else:
-            print("No client_reference_id found in Stripe session")
+        user = User.query.filter_by(phone_number=phone).first()
 
-    return {"status": "success"}
+        if user:
+            user.plan = plan
+            db.session.commit()
+
+            print("User upgraded:", user.phone_number, user.plan)
+
+            # send confirmation (Step 2)
+            send_whatsapp_message(
+                phone,
+                f"✅ You're now on {plan.upper()} plan.\n\n"
+                "Unlimited tracking unlocked 🚀"
+            )
+
+    return "OK", 200
 
 
 @app.route("/stripe-success")
