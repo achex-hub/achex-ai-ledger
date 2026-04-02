@@ -349,6 +349,34 @@ def set_plan():
     }
 
 
+@app.route("/admin/reset-count", methods=["GET"])
+def reset_count():
+    phone = request.args.get("phone", "").strip()
+
+    if not phone:
+        return {"error": "phone is required"}, 400
+
+    if phone.startswith("whatsapp: ") and not phone.startswith("whatsapp:+"):
+        phone = phone.replace("whatsapp: ", "whatsapp:+", 1)
+
+    user = User.query.filter_by(phone_number=phone).first()
+
+    if not user:
+        return {
+            "error": "user not found",
+            "phone_received": phone
+        }, 404
+
+    user.monthly_transaction_count = 0
+    db.session.commit()
+
+    return {
+        "message": "monthly count reset",
+        "phone": user.phone_number,
+        "monthly_transaction_count": user.monthly_transaction_count
+    }
+
+
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
