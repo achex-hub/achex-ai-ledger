@@ -187,7 +187,8 @@ def whatsapp_webhook():
             starter_upgrade_link = generate_upgrade_link(from_number, "starter")
             pro_upgrade_link = generate_upgrade_link(from_number, "pro")
             return send_whatsapp_message(from_number,
-                f"Upgrade here:\n{(starter_upgrade_link\n), (pro_upgrade_link)}"
+                f"Upgrade here:\n{starter_upgrade_link\n}"
+                                "{pro_upgrade_link)}"
             )
 
     if any(phrase in normalized for phrase in [
