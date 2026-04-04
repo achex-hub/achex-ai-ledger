@@ -279,7 +279,7 @@ def whatsapp_webhook():
         invite_line = (
             "\n\n🔥 You're tracking like a pro.\n"
             "Invite a friend:\n"
-            f"https://wa.me/{os.getenv(PUBLIC_WHATSAPP_NUMBER)}"
+            f"https://wa.me/{os.getenv('PUBLIC_WHATSAPP_NUMBER')}"
         )
 
     msg.body(
