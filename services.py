@@ -203,6 +203,21 @@ def save_transaction(user: User, parsed: dict, raw_message: str) -> Transaction:
     return transaction
 
 
+def generate_summary(user):
+    total_income = sum(t.total for t in user.transactions if t.transaction_type == "income")
+    total_expense = sum(t.total for t in user.transactions if t.transaction_type == "expense")
+
+    profit = total_income - total_expense
+
+    return (
+        f"📊 Summary:\n\n"
+        f"Income: ${total_income:.2f}\n"
+        f"Expenses: ${total_expense:.2f}\n"
+        f"Profit: ${profit:.2f}\n\n"
+        f"Keep going 🚀"
+    )
+
+
 def get_summary_for_range(user: User, start_dt: datetime, end_dt: datetime) -> dict:
     income_total = db.session.query(func.coalesce(func.sum(Transaction.total), 0)).filter(
         Transaction.user_id == user.id,

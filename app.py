@@ -183,6 +183,13 @@ def whatsapp_webhook():
             msg.body(f"Your PDF export is ready:\n{file_url}")
             return str(resp)
 
+        if incoming_msg.lower() in ["upgrade", "pricing", "plan"]:
+            starter_upgrade_link = generate_upgrade_link(from_number, "starter")
+            pro_upgrade_link = generate_upgrade_link(from_number, "pro")
+            return send_whatsapp_message(from_number,
+                f"Upgrade here:\n{starter_upgrade_link, pro_upgrade_link}"
+            )
+
     if any(phrase in normalized for phrase in [
         "how does this work",
         "how it works",
