@@ -244,9 +244,9 @@ def whatsapp_webhook():
         msg.body(
             "🚫 You've reached your monthly limit.\n\n"
             "Upgrade now to continue:\n\n"
-            "Starter\n"
+            "Starter - 500 Transactions\n"
             f"{starter_upgrade_link}\n\n"
-            "Pro\n"
+            "Pro - Unlimited Transations\n"
             f"{pro_upgrade_link}\n\n"
             "Takes 10 seconds."
         )
