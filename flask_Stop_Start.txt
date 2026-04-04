@@ -4,17 +4,14 @@ python app.py
 Browser achex Plan Upgrade Link:
 Free:
 https://app.achex.ai/admin/set-plan?phone=whatsapp:%2B17024939766&plan=free
-Pro:
-http://127.0.0.1:5000/admin/set-plan?phone=whatsapp:%2B17024939766&plan=pro
 Starter:
-http://127.0.0.1:5000/admin/set-plan?phone=whatsapp:%2B17024939766&plan=starter
-
-Reset Link:
-Reset:
+https://app.achex.ai/admin/set-plan?phone=whatsapp:%2B17024939766&plan=starter
+Pro:
+https://app.achex.ai/admin/set-plan?phone=whatsapp:%2B17024939766&plan=pro
+Reset Count Link:
 https://app.achex.ai/admin/reset-count?phone=whatsapp:%2B17024939766
 
 Redelpoy Bash:
 git add .
 git commit -m "Fix syntax error and test free plan limit"
 git push
-
