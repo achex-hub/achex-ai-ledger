@@ -187,7 +187,7 @@ def whatsapp_webhook():
             starter_upgrade_link = generate_upgrade_link(from_number, "starter")
             pro_upgrade_link = generate_upgrade_link(from_number, "pro")
             return send_whatsapp_message(from_number,
-                f"Upgrade here:\n{starter_upgrade_link, pro_upgrade_link}"
+                f"Upgrade here:\n{starter_upgrade_link\n}, {pro_upgrade_link}"
             )
 
     if any(phrase in normalized for phrase in [
@@ -281,6 +281,36 @@ def whatsapp_webhook():
     transaction = save_transaction(user, parsed, incoming_message)
 
     invite_line = ""
+
+    if not parsed_transaction:
+        lower_msg = incoming_msg.lower()
+
+        if "how" in lower_msg or "what" in lower_msg:
+            return send_whatsapp_message(from_number,
+                "I track your business automatically.\n\n"
+                "Just send messages like:\n"
+                "• Sold coffee 10\n"
+                "• Bought sugar 5\n\n"
+                "You can also type *summary* anytime."
+            )
+
+        elif "price" in lower_msg or "cost" in lower_msg:
+            return send_whatsapp_message(from_number,
+                "Plans:\n"
+                "• Free – 12 transactions\n"
+                "• Starter – $9/month\n"
+                "• Pro – $29/month\n\n"
+                "Type *upgrade* to continue."
+            )
+
+        else:
+            return send_whatsapp_message(from_number,
+                "I didn’t understand that.\n\n"
+                "Try:\n"
+                "• Sold coffee 10\n"
+                "• Bought milk 5\n"
+                "• summary"
+            )
 
     if user.monthly_transaction_count % 5 == 0:
         invite_line = (
