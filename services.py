@@ -247,6 +247,7 @@ def get_summary_for_range(user: User, start_dt: datetime, end_dt: datetime) -> d
         "end": end_dt,
     }
 
+
 def get_today_summary(user: User) -> dict:
     now = datetime.now(timezone.utc)
     start_of_day = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
@@ -280,6 +281,7 @@ def get_year_summary(user: User) -> dict:
     next_year = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
     return get_summary_for_range(user, start_of_year, next_year)
 
+
 def get_transactions_for_range(user: User, start_dt: datetime, end_dt: datetime):
     transactions = Transaction.query.filter(
         Transaction.user_id == user.id,
@@ -288,6 +290,7 @@ def get_transactions_for_range(user: User, start_dt: datetime, end_dt: datetime)
     ).order_by(Transaction.created_at.asc()).all()
 
     return transactions
+
 
 def parse_date_range_command(text: str):
     """
@@ -320,6 +323,7 @@ def parse_date_range_command(text: str):
         return start_dt, end_dt
     except Exception:
         return None
+
 
 def get_transaction_count_for_range(user: User, start_dt: datetime, end_dt: datetime) -> int:
     count = db.session.query(func.count(Transaction.id)).filter(
@@ -373,6 +377,7 @@ def format_summary_message(summary: dict, label: str = "Summary") -> str:
 
     return "\n".join(lines)
 
+
 def help_message() -> str:
     return (
         "Welcome to achex AI Ledger.\n\n"
@@ -387,6 +392,7 @@ def help_message() -> str:
         "- export csv month\n\n"
         "Send your first transaction now."
     )
+
 
 def export_transactions_csv(user: User, start_dt: datetime, end_dt: datetime) -> str:
     transactions = get_transactions_for_range(user, start_dt, end_dt)
@@ -420,6 +426,7 @@ def export_transactions_csv(user: User, start_dt: datetime, end_dt: datetime) ->
             ])
 
     return filename
+
 
 def export_summary_pdf(user: User, start_dt: datetime, end_dt: datetime, label: str) -> str:
     summary = get_summary_for_range(user, start_dt, end_dt)
@@ -468,6 +475,7 @@ def export_summary_pdf(user: User, start_dt: datetime, end_dt: datetime, label: 
     c.save()
     return filename
 
+
 def parse_export_command(text: str):
     """
     Supports:
@@ -493,6 +501,7 @@ def parse_export_command(text: str):
 
     return export_type, period
 
+
 def reset_monthly_usage_if_needed(user: User):
     now = datetime.now(timezone.utc)
 
@@ -505,6 +514,7 @@ def reset_monthly_usage_if_needed(user: User):
         user.monthly_transaction_count = 0
         user.last_reset_date = now
         db.session.commit()
+
 
 def upgrade_message(user: User) -> str:
     base_url = os.getenv("APP_BASE_URL")
@@ -520,9 +530,11 @@ def upgrade_message(user: User) -> str:
         "No app. No spreadsheets. Just send messages on WhatsApp."
     )
 
+
 def generate_upgrade_link(phone, plan):
     base_url = os.getenv("APP_BASE_URL")
     return f"{base_url}/upgrade/{plan}/{phone}"
+
 
 def handle_general_question(user, message: str) -> str:
     try:
