@@ -1,50 +1,55 @@
-#app.py
 from flask import Flask, request, redirect, send_from_directory
 from twilio.twiml.messaging_response import MessagingResponse
 from datetime import datetime, timezone, timedelta
-
 import os
 import stripe
 
 from config import Config
 from models import db, User
 from services import (
-    get_or_create_user,
-    normalize_text,
-    parse_transaction_with_ai,
-    save_transaction,
-    get_today_summary,
-    get_week_summary,
-    get_month_summary,
-    get_year_summary,
-    get_summary_for_range,
-    parse_date_range_command,
-    format_summary_message,
-    help_message,
-    upgrade_message,
-    user_can_add_transaction,
-    reset_monthly_usage_if_needed,
     PLAN_LIMITS,
     create_checkout_session,
-    export_transactions_csv,
     export_summary_pdf,
-    parse_export_command,
-    handle_general_question,
+    export_transactions_csv,
+    format_summary_message,
     generate_upgrade_link,
+    get_month_summary,
+    get_or_create_user,
+    get_summary_for_range,
+    get_today_summary,
+    get_week_summary,
+    get_year_summary,
+    handle_general_question,
+    help_message,
+    normalize_text,
+    parse_date_range_command,
+    parse_export_command,
+    parse_transaction_with_ai,
+    reset_monthly_usage_if_needed,
+    save_transaction,
+    user_can_add_transaction,
 )
 
 app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
 
+if not app.config.get("PUBLIC_WHATSAPP_NUMBER"):
+    raise ValueError("PUBLIC_WHATSAPP_NUMBER is missing")
+
+if not app.config.get("APP_BASE_URL"):
+    raise ValueError("APP_BASE_URL is missing")
+
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 with app.app_context():
     db.create_all()
 
+
 @app.route("/")
 def home():
     return {"status": "ok", "app": "achex AI Ledger"}
+
 
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp_webhook():
@@ -69,19 +74,12 @@ def whatsapp_webhook():
     print("Current user plan:", user.plan)
     print("Current monthly count:", user.monthly_transaction_count)
 
-    if normalized in ["upgrade starter", "upgrade pro"]:
-        plan = normalized.split()[1]
-        link = generate_upgrade_link(from_number, plan)
-
-        msg.body(
-            f"Upgrade to {plan.upper()}:\n{link}"
-        )
-        return str(resp)
-
+    # HELP
     if normalized == "help":
         msg.body(help_message())
         return str(resp)
 
+    # SUMMARIES
     if normalized in ["summary", "today", "today summary"]:
         summary = get_today_summary(user)
         msg.body(format_summary_message(summary, "Today's Summary"))
@@ -126,6 +124,7 @@ def whatsapp_webhook():
         msg.body(format_summary_message(summary, label))
         return str(resp)
 
+    # EXPORTS
     export_result = parse_export_command(incoming_message)
     if export_result:
         export_type, period = export_result
@@ -170,6 +169,9 @@ def whatsapp_webhook():
             label = f"{start_dt.date()} to {(end_dt - timedelta(days=1)).date()}"
 
         base_url = os.getenv("APP_BASE_URL")
+        if not base_url:
+            msg.body("APP_BASE_URL is not configured.")
+            return str(resp)
 
         if export_type == "csv":
             filename = export_transactions_csv(user, start_dt, end_dt)
@@ -183,13 +185,7 @@ def whatsapp_webhook():
             msg.body(f"Your PDF export is ready:\n{file_url}")
             return str(resp)
 
-        if incoming_msg.lower() in ["upgrade", "pricing", "plan"]:
-            starter_upgrade_link = generate_upgrade_link(from_number, "starter")
-            pro_upgrade_link = generate_upgrade_link(from_number, "pro")
-            return send_whatsapp_message(from_number,
-                f"Upgrade here:\n{starter_upgrade_link}\n, {pro_upgrade_link}"
-            )
-
+    # SIMPLE SMART TRIGGERS
     if any(phrase in normalized for phrase in [
         "how does this work",
         "how it works",
@@ -197,7 +193,7 @@ def whatsapp_webhook():
         "how to use",
         "how do i use",
         "what is this",
-        "what does this do"
+        "what does this do",
     ]):
         msg.body(
             "📘 Here's how it works:\n\n"
@@ -212,26 +208,22 @@ def whatsapp_webhook():
         )
         return str(resp)
 
-    if any(phrase in normalized for phrase in ["how much"]):
+    if any(word in normalized for word in ["price", "cost", "pricing", "plan", "plans"]):
         msg.body(
-            "💰 Pricing:\n\n"
-            "Free – limited usage\n"
-            "Starter – $9/month\n"
-            "Pro – $29/month\n\n"
-            "Upgrade anytime inside WhatsApp."
+            "💰 Plans:\n\n"
+            "Free → limited usage\n"
+            "Starter → $9/month\n"
+            "Pro → $29/month\n\n"
+            "Type:\n"
+            "• upgrade starter\n"
+            "• upgrade pro"
         )
         return str(resp)
 
-    if any(word in normalized for word in ["price", "cost", "pricing"]):
-        msg.body(
-            "💰 Plans:\n\n"
-            "Free → Try it\n"
-            "Starter → $9/month (for daily use)\n"
-            "Pro → $29/month (full business)\n\n"
-            "Upgrade instantly:\n"
-            "👉 type 'upgrade starter'\n"
-            "👉 type 'upgrade pro'"
-        )
+    if normalized in ["upgrade starter", "upgrade pro"]:
+        plan = normalized.split()[1]
+        upgrade_link = generate_upgrade_link(from_number, plan)
+        msg.body(f"Upgrade to {plan.title()} here:\n{upgrade_link}")
         return str(resp)
 
     if "how" in normalized:
@@ -240,25 +232,26 @@ def whatsapp_webhook():
             "• Sold coffee 10\n"
             "• Bought milk 5\n"
             "• summary\n\n"
-            "Try one now for FREE 👇"
+            "Try one now 👇"
         )
         return str(resp)
 
+    # HARD PAYWALL
     if not user_can_add_transaction(user):
-        starter_upgrade_link = generate_upgrade_link(from_number, "starter")
-        pro_upgrade_link = generate_upgrade_link(from_number, "pro")
-
+        starter_link = generate_upgrade_link(from_number, "starter")
+        pro_link = generate_upgrade_link(from_number, "pro")
         msg.body(
             "🚫 You've reached your monthly limit.\n\n"
             "Upgrade now to continue:\n\n"
             "Starter - 500 Transactions Monthly\n"
-            f"{starter_upgrade_link}\n\n"
-            "Pro - Unlimited Transations\n"
-            f"{pro_upgrade_link}\n\n"
+            f"{starter_link}\n\n"
+            "Pro - Unlimited Transactions\n"
+            f"{pro_link}\n\n"
             "Takes 10 seconds."
         )
         return str(resp)
 
+    # PARSE TRANSACTION
     parsed = parse_transaction_with_ai(incoming_message)
     print("Parsed transaction:", parsed)
 
@@ -278,53 +271,38 @@ def whatsapp_webhook():
         )
         return str(resp)
 
+    # SOFT UPSELL
+    limit = PLAN_LIMITS.get(user.plan, 50)
+    next_count = user.monthly_transaction_count + 1
+
+    soft_upsell_text = ""
+    if next_count >= 0.8 * limit and next_count < limit:
+        soft_upsell_text = (
+            "\n\n⚠️ You're close to your monthly limit.\n"
+            "Upgrade soon to avoid interruption."
+        )
+
+    # SAVE TRANSACTION
     transaction = save_transaction(user, parsed, incoming_message)
 
+    # FRIEND INVITE
     invite_line = ""
-
-    if not parsed_transaction:
-        lower_msg = incoming_msg.lower()
-
-        if "how" in lower_msg or "what" in lower_msg:
-            return send_whatsapp_message(from_number,
-                "I track your business automatically.\n\n"
-                "Just send messages like:\n"
-                "• Sold coffee 10\n"
-                "• Bought sugar 5\n\n"
-                "You can also type *summary* anytime."
-            )
-
-        elif "price" in lower_msg or "cost" in lower_msg:
-            return send_whatsapp_message(from_number,
-                "Plans:\n"
-                "• Free – 12 transactions\n"
-                "• Starter – $9/month\n"
-                "• Pro – $29/month\n\n"
-                "Type *upgrade* to continue."
-            )
-
-        else:
-            return send_whatsapp_message(from_number,
-                "I didn’t understand that.\n\n"
-                "Try:\n"
-                "• Sold coffee 10\n"
-                "• Bought milk 5\n"
-                "• summary"
-            )
-
-    if user.monthly_transaction_count % 5 == 0:
+    public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
+    if public_number and user.monthly_transaction_count % 5 == 0:
         invite_line = (
             "\n\n🔥 You're tracking like a pro.\n"
             "Invite a friend:\n"
-            f"https://wa.me/{os.getenv('PUBLIC_WHATSAPP_NUMBER')}"
+            f"https://wa.me/{public_number}"
         )
 
     msg.body(
         f"Recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
         "You're tracking your business in real time."
+        + soft_upsell_text
         + invite_line
     )
     return str(resp)
+
 
 @app.route("/pricing")
 def pricing():
@@ -342,7 +320,7 @@ def pricing():
                     <div style="flex: 1; background: white; padding: 30px; border-radius: 12px;">
                         <h2>Free</h2>
                         <p><strong>$0/month</strong></p>
-                        <p>Up to 50 transactions per month</p>
+                        <p>Limited monthly transactions</p>
                     </div>
 
                     <div style="flex: 1; background: white; padding: 30px; border-radius: 12px;">
@@ -361,6 +339,7 @@ def pricing():
         </body>
     </html>
     """
+
 
 @app.route("/admin/set-plan", methods=["GET"])
 def set_plan():
@@ -497,6 +476,7 @@ def stripe_cancel():
     </html>
     """
 
+
 @app.route("/admin/set-email", methods=["GET"])
 def set_email():
     phone = request.args.get("phone", "").strip()
@@ -538,9 +518,11 @@ def upgrade_checkout(plan, phone):
         print("Upgrade route error:", str(e))
         return {"error": str(e)}, 400
 
+
 @app.route("/exports/<filename>")
 def download_export(filename):
     return send_from_directory("exports", filename, as_attachment=True)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

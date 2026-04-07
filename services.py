@@ -1,4 +1,3 @@
-# services.py
 import os
 import json
 import stripe
@@ -14,19 +13,6 @@ from models import db, User, Transaction
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from twilio.rest import Client
-
-def send_whatsapp_message(to_number, message):
-    client = Client(
-        os.getenv("TWILIO_ACCOUNT_SID"),
-        os.getenv("TWILIO_AUTH_TOKEN")
-    )
-
-    client.messages.create(
-        from_=f"whatsapp:{os.getenv('TWILIO_WHATSAPP_NUMBER')}",
-        body=message,
-        to=to_number
-    )
 
 EXPORT_DIR = Path("exports")
 EXPORT_DIR.mkdir(exist_ok=True)
@@ -36,7 +22,7 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
 PLAN_LIMITS = {
-    "free": 5,      # keep 2 while testing
+    "free": 5,       # change this to 12 or 50 when you're done testing
     "starter": 500,
     "pro": 9999999,
 }
@@ -81,6 +67,11 @@ def create_checkout_session(phone_number: str, plan: str) -> str:
     print("  session_url:", session.url)
 
     return session.url
+
+
+def generate_upgrade_link(phone: str, plan: str) -> str:
+    base_url = os.getenv("APP_BASE_URL")
+    return f"{base_url}/upgrade/{plan}/{phone}"
 
 
 def get_or_create_user(phone_number: str) -> User:
@@ -203,21 +194,6 @@ def save_transaction(user: User, parsed: dict, raw_message: str) -> Transaction:
     return transaction
 
 
-def generate_summary(user):
-    total_income = sum(t.total for t in user.transactions if t.transaction_type == "income")
-    total_expense = sum(t.total for t in user.transactions if t.transaction_type == "expense")
-
-    profit = total_income - total_expense
-
-    return (
-        f"📊 Summary:\n\n"
-        f"Income: ${total_income:.2f}\n"
-        f"Expenses: ${total_expense:.2f}\n"
-        f"Profit: ${profit:.2f}\n\n"
-        f"Keep going 🚀"
-    )
-
-
 def get_summary_for_range(user: User, start_dt: datetime, end_dt: datetime) -> dict:
     income_total = db.session.query(func.coalesce(func.sum(Transaction.total), 0)).filter(
         Transaction.user_id == user.id,
@@ -293,11 +269,6 @@ def get_transactions_for_range(user: User, start_dt: datetime, end_dt: datetime)
 
 
 def parse_date_range_command(text: str):
-    """
-    Supports:
-    - summary 2026-03-01 to 2026-03-24
-    - range 2026-03-01 to 2026-03-24
-    """
     normalized = " ".join(text.strip().lower().split())
 
     if " to " not in normalized:
@@ -353,7 +324,8 @@ def get_top_items_for_range(user: User, start_dt: datetime, end_dt: datetime, li
             "amount": float(row.amount),
         }
         for row in rows
-    ]    
+    ]
+
 
 def format_summary_message(summary: dict, label: str = "Summary") -> str:
     lines = [
@@ -389,7 +361,8 @@ def help_message() -> str:
         "- summary\n"
         "- week\n"
         "- month\n"
-        "- export csv month\n\n"
+        "- export csv month\n"
+        "- export pdf month\n\n"
         "Send your first transaction now."
     )
 
@@ -477,14 +450,6 @@ def export_summary_pdf(user: User, start_dt: datetime, end_dt: datetime, label: 
 
 
 def parse_export_command(text: str):
-    """
-    Supports:
-    - export csv month
-    - export pdf month
-    - export csv year
-    - export pdf last 30 days
-    - export csv 2026-03-01 to 2026-03-24
-    """
     normalized = " ".join(text.strip().lower().split())
 
     if not normalized.startswith("export "):
@@ -517,10 +482,8 @@ def reset_monthly_usage_if_needed(user: User):
 
 
 def upgrade_message(user: User) -> str:
-    base_url = os.getenv("APP_BASE_URL")
-
-    starter_link = f"{base_url}/upgrade/starter/{user.phone_number}"
-    pro_link = f"{base_url}/upgrade/pro/{user.phone_number}"
+    starter_link = generate_upgrade_link(user.phone_number, "starter")
+    pro_link = generate_upgrade_link(user.phone_number, "pro")
 
     return (
         "You've reached your free limit.\n\n"
@@ -529,11 +492,6 @@ def upgrade_message(user: User) -> str:
         f"Pro — $29/month\n{pro_link}\n\n"
         "No app. No spreadsheets. Just send messages on WhatsApp."
     )
-
-
-def generate_upgrade_link(phone, plan):
-    base_url = os.getenv("APP_BASE_URL")
-    return f"{base_url}/upgrade/{plan}/{phone}"
 
 
 def handle_general_question(user, message: str) -> str:
