@@ -506,6 +506,10 @@ def handle_general_question(user, message: str) -> str:
                         "Help small business owners understand how to use the app. "
                         "Be concise, practical, and friendly. "
                         "Do NOT hallucinate features."
+                        "Help users use achex AI Ledger through WhatsApp only. "
+                        "Do not mention app tabs, dashboards, screens, or features that do not exist. "
+                        "Available commands include help, summary, week, month, year, export csv month, export pdf month, insight, and advice. "
+                        "If the user asks how to access a feature, explain the exact WhatsApp command."
                     )
                 },
                 {
@@ -521,3 +525,135 @@ def handle_general_question(user, message: str) -> str:
     except Exception as e:
         print("AI fallback error:", str(e))
         return "Type 'help' to see what you can do."
+
+def is_premium(user):
+    return user.plan in ["starter", "pro"]
+
+def get_daily_summary(user):
+    from models import Transaction
+    from datetime import date
+
+    today = date.today()
+
+    txns = Transaction.query.filter(
+        Transaction.user_id == user.id,
+        db.func.date(Transaction.created_at) == today
+    ).all()
+
+    income = sum(t.total for t in txns if t.type == "income")
+    expenses = sum(t.total for t in txns if t.type == "expense")
+
+    profit = income - expenses
+
+    if not txns:
+        return "No transactions today yet."
+
+    return (
+        f"📊 Today Summary\n\n"
+        f"Income: ${income:.2f}\n"
+        f"Expenses: ${expenses:.2f}\n"
+        f"Profit: ${profit:.2f}"
+    )
+        
+def generate_insight(user):
+    from datetime import datetime, timezone, timedelta
+    from models import Transaction
+
+    now = datetime.now(timezone.utc)
+    start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+
+    txns = Transaction.query.filter(
+        Transaction.user_id == user.id,
+        Transaction.created_at >= start_of_month,
+        Transaction.created_at <= now
+    ).order_by(Transaction.created_at.asc()).all()
+
+    if not txns:
+        return (
+            "📈 Insight\n\n"
+            "You don't have enough data yet.\n\n"
+            "Send a few transactions first, then ask for insight again."
+        )
+
+    income_txns = [t for t in txns if t.type == "income"]
+    expense_txns = [t for t in txns if t.type == "expense"]
+
+    total_income = sum(t.total for t in income_txns)
+    total_expenses = sum(t.total for t in expense_txns)
+    profit = total_income - total_expenses
+    txn_count = len(txns)
+
+    top_income_items = {}
+    for t in income_txns:
+        key = (t.item or "").strip().lower()
+        if not key:
+            continue
+        top_income_items[key] = top_income_items.get(key, 0) + t.total
+
+    top_expense_items = {}
+    for t in expense_txns:
+        key = (t.item or "").strip().lower()
+        if not key:
+            continue
+        top_expense_items[key] = top_expense_items.get(key, 0) + t.total
+
+    best_seller = max(top_income_items.items(), key=lambda x: x[1])[0] if top_income_items else None
+    biggest_expense = max(top_expense_items.items(), key=lambda x: x[1])[0] if top_expense_items else None
+
+    prompt = f"""
+You are an AI business assistant for a small business owner using WhatsApp bookkeeping.
+
+Based on the business data below, generate a SHORT, practical insight message.
+
+Rules:
+- Keep it under 120 words.
+- Write for a non-technical small business owner.
+- Be specific and actionable.
+- Do not mention dashboards, tabs, screens, or app UI.
+- Do not invent numbers.
+- Output plain text only.
+- Structure:
+  1. One headline line starting with "📈 Insight"
+  2. 2-4 short bullet points
+  3. One final action line starting with "Next step:"
+
+Business data:
+- Transactions this month: {txn_count}
+- Total income: {total_income:.2f}
+- Total expenses: {total_expenses:.2f}
+- Profit: {profit:.2f}
+- Best selling item: {best_seller if best_seller else "N/A"}
+- Biggest expense category: {biggest_expense if biggest_expense else "N/A"}
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt
+        )
+        text = response.output_text.strip()
+
+        if not text:
+            raise ValueError("Empty insight response")
+
+        return text
+
+    except Exception as e:
+        print("Insight generation error:", str(e))
+
+        fallback_lines = [
+            "📈 Insight",
+            f"- Revenue this month: ${total_income:.2f}",
+            f"- Expenses this month: ${total_expenses:.2f}",
+            f"- Profit this month: ${profit:.2f}",
+        ]
+
+        if best_seller:
+            fallback_lines.append(f"- Best selling item: {best_seller.title()}")
+
+        if biggest_expense:
+            fallback_lines.append(f"- Biggest expense: {biggest_expense.title()}")
+
+        fallback_lines.append("Next step: focus on selling more of your strongest item and controlling your top expense.")
+
+        return "\n".join(fallback_lines)

@@ -28,6 +28,9 @@ from services import (
     reset_monthly_usage_if_needed,
     save_transaction,
     user_can_add_transaction,
+    get_daily_summary, 
+    is_premium, 
+    generate_insight,
 )
 
 app = Flask(__name__)
@@ -250,6 +253,52 @@ def whatsapp_webhook():
             "Takes 10 seconds."
         )
         return str(resp)
+
+    #SMART QUESTIONS   
+    text = incoming_message.lower()
+
+    if "summary" in text:
+        summary = get_daily_summary(user)
+        msg.body(
+            summary +
+            "\n\n🚀 Want deeper insights?\nUpgrade to unlock analytics."
+        )
+        return str(resp)
+
+
+    if "advice" in text or "insight" in text:
+        if not is_premium(user):
+            upgrade_link = generate_upgrade_link(from_number, "starter")
+
+            msg.body(
+                "🔒 Advanced insights are a premium feature.\n\n"
+                "Upgrade to unlock:\n"
+                "• Profit analysis\n"
+                "• Smart insights\n"
+                "• Business tips\n\n"
+                f"{upgrade_link}"
+            )
+            return str(resp)
+
+        insight = generate_insight(user)
+        msg.body(insight)
+        return str(resp)
+
+    if "how much" in text or "total" in text:
+        summary = get_daily_summary(user)
+        msg.body(summary)
+        return str(resp)
+
+    if "help" in text:
+        msg.body(
+            "Try:\n"
+            "• Sold coffee 10\n"
+            "• Bought milk 5\n"
+            "• summary\n"
+            "• How much did I make today?\n"
+            "• insight"
+        )
+        return str(resp)    
 
     # PARSE TRANSACTION
     parsed = parse_transaction_with_ai(incoming_message)
