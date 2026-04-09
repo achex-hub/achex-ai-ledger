@@ -33,7 +33,7 @@ class Transaction(db.Model):
     total = db.Column(db.Float, nullable=False)
     currency = db.Column(db.String(10), default="USD", nullable=False)
     raw_message = db.Column(db.Text, nullable=False)
-    twilio_message_sid = db.Column(db.String(64), nullable=True, unique=True, index=True)
+    twilio_message_sid = db.Column(db.String(64), unique=True, nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
 
 def reset_monthly_usage_if_needed(user: User):
