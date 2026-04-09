@@ -56,14 +56,13 @@ def home():
 
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp_webhook():
-    message_sid = request.form.get("MessageSid", "").strip()
-    print("Twilio MessageSid:", message_sid)
-    
     incoming_message = request.form.get("Body", "").strip()
     from_number = request.form.get("From", "").strip()
+    message_sid = request.form.get("MessageSid", "").strip()    
 
     print("Incoming message:", incoming_message)
     print("From number:", from_number)
+    print("Twilio MessageSid:", message_sid)
 
     resp = MessagingResponse()
     msg = resp.message()
@@ -321,8 +320,9 @@ def whatsapp_webhook():
             "• summary\n\n"
             "Or type help"
         )
-        return str(resp)
+        return str(resp)    
 
+    #DUPLICATE CHECK
     if message_sid:
         existing_txn = Transaction.query.filter_by(twilio_message_sid=message_sid).first()
         if existing_txn:
@@ -330,7 +330,7 @@ def whatsapp_webhook():
                 f"Recorded: {existing_txn.type.title()} — {existing_txn.item.title()} — ${existing_txn.total:.2f}\n\n"
                 "This message was already processed."
             )
-            return str(resp)    
+            return str(resp)
 
     # SOFT UPSELL
     limit = PLAN_LIMITS.get(user.plan, 50)
@@ -583,21 +583,6 @@ def upgrade_checkout(plan, phone):
 @app.route("/exports/<filename>")
 def download_export(filename):
     return send_from_directory("exports", filename, as_attachment=True)
-
-
-@app.route("/admin/rebuild-transactions", methods=["GET"])
-def rebuild_transactions():
-    token = request.args.get("token", "").strip()
-
-    if token != os.getenv("SECRET_KEY"):
-        return {"error": "unauthorized"}, 403
-
-    with db.engine.begin() as conn:
-        conn.exec_driver_sql("DROP TABLE IF EXISTS transactions CASCADE;")
-
-    db.create_all()
-
-    return {"message": "transactions table rebuilt successfully"}
 
 if __name__ == "__main__":
     app.run(debug=True)

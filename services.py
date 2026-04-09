@@ -172,9 +172,7 @@ User message:
 
 
 def save_transaction(user, parsed, raw_message, twilio_message_sid=None):
-    from models import Transaction, db
-
-    txn = Transaction(
+    transaction = Transaction(
         user_id=user.id,
         type=parsed["transaction_type"],
         item=parsed["item"],
