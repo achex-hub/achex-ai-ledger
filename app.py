@@ -5,7 +5,7 @@ import os
 import stripe
 
 from config import Config
-from models import db, User
+from models import db, User, Transaction
 from services import (
     PLAN_LIMITS,
     create_checkout_session,
@@ -56,6 +56,9 @@ def home():
 
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp_webhook():
+    message_sid = request.form.get("MessageSid", "").strip()
+    print("Twilio MessageSid:", message_sid)
+    
     incoming_message = request.form.get("Body", "").strip()
     from_number = request.form.get("From", "").strip()
 
@@ -320,6 +323,15 @@ def whatsapp_webhook():
         )
         return str(resp)
 
+    if message_sid:
+        existing_txn = Transaction.query.filter_by(twilio_message_sid=message_sid).first()
+        if existing_txn:
+            msg.body(
+                f"Recorded: {existing_txn.type.title()} — {existing_txn.item.title()} — ${existing_txn.total:.2f}\n\n"
+                "This message was already processed."
+            )
+            return str(resp)    
+
     # SOFT UPSELL
     limit = PLAN_LIMITS.get(user.plan, 50)
     next_count = user.monthly_transaction_count + 1
@@ -332,7 +344,7 @@ def whatsapp_webhook():
         )
 
     # SAVE TRANSACTION
-    transaction = save_transaction(user, parsed, incoming_message)
+    transaction = save_transaction(user, parsed, incoming_message, message_sid)
 
     # FRIEND INVITE
     invite_line = ""
@@ -572,6 +584,20 @@ def upgrade_checkout(plan, phone):
 def download_export(filename):
     return send_from_directory("exports", filename, as_attachment=True)
 
+
+@app.route("/admin/rebuild-transactions", methods=["GET"])
+def rebuild_transactions():
+    token = request.args.get("token", "").strip()
+
+    if token != os.getenv("SECRET_KEY"):
+        return {"error": "unauthorized"}, 403
+
+    with db.engine.begin() as conn:
+        conn.exec_driver_sql("DROP TABLE IF EXISTS transactions CASCADE;")
+
+    db.create_all()
+
+    return {"message": "transactions table rebuilt successfully"}
 
 if __name__ == "__main__":
     app.run(debug=True)

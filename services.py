@@ -171,8 +171,10 @@ User message:
     return parsed
 
 
-def save_transaction(user: User, parsed: dict, raw_message: str) -> Transaction:
-    transaction = Transaction(
+def save_transaction(user, parsed, raw_message, twilio_message_sid=None):
+    from models import Transaction, db
+
+    txn = Transaction(
         user_id=user.id,
         type=parsed["transaction_type"],
         item=parsed["item"],
@@ -180,7 +182,8 @@ def save_transaction(user: User, parsed: dict, raw_message: str) -> Transaction:
         unit_price=float(parsed.get("unit_price", 0) or 0),
         total=float(parsed.get("total", 0) or 0),
         currency="USD",
-        raw_message=raw_message
+        raw_message=raw_message,
+        twilio_message_sid=twilio_message_sid,
     )
 
     db.session.add(transaction)
@@ -549,7 +552,7 @@ def get_daily_summary(user):
         return "No transactions today yet."
 
     return (
-        f"📊 Today Summary\n\n"
+        f"📊 Today's Summary\n\n"
         f"Income: ${income:.2f}\n"
         f"Expenses: ${expenses:.2f}\n"
         f"Profit: ${profit:.2f}"
