@@ -48,6 +48,12 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 with app.app_context():
     db.create_all()
 
+def stripe_obj_to_dict(obj):
+    try:
+        return dict(obj) if obj else {}
+    except Exception:
+        return {}
+
 
 @app.route("/")
 def home():
