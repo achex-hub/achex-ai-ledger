@@ -231,7 +231,7 @@ def whatsapp_webhook():
         )
         return str(resp)
 
-    if any(word in normalized for word in ["price", "cost", "pricing", "plan", "plans"]):
+    if any(word in normalized for word in ["price", "cost", "pricing", "plan", "plans", "upgrade"]):
         msg.body(
             "💰 Plans:\n\n"
             "Free → limited usage\n"
@@ -524,16 +524,17 @@ def stripe_webhook():
 
     print("EVENT TYPE:", event["type"])
 
+    # 1. Initial successful checkout
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
         phone = session.client_reference_id
-
         plan = "starter"
+
         if session.metadata and "plan" in session.metadata:
             plan = session.metadata["plan"]
 
-        print("Stripe payment received:", phone, plan)
+        print("Checkout completed:", phone, plan)
 
         if phone:
             user = User.query.filter_by(phone_number=phone).first()
@@ -546,7 +547,76 @@ def stripe_webhook():
             else:
                 print("No user found for phone:", phone)
         else:
-            print("No client_reference_id found in Stripe session")
+            print("No client_reference_id found in checkout session")
+
+    # 2. Renewal succeeded
+    elif event["type"] == "invoice.paid":
+        invoice = event["data"]["object"]
+
+        metadata = {}
+        if hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
+            if invoice.lines.data and hasattr(invoice.lines.data[0], "metadata"):
+                metadata = invoice.lines.data[0].metadata or {}
+
+        if not metadata and hasattr(invoice, "parent") and invoice.parent:
+            if hasattr(invoice.parent, "subscription_details") and invoice.parent.subscription_details:
+                if hasattr(invoice.parent.subscription_details, "metadata"):
+                    metadata = invoice.parent.subscription_details.metadata or {}
+
+        phone = metadata.get("phone") if metadata else None
+        plan = metadata.get("plan") if metadata else None
+
+        print("Invoice paid:", phone, plan)
+
+        if phone and plan:
+            user = User.query.filter_by(phone_number=phone).first()
+            if user:
+                user.plan = plan
+                db.session.commit()
+                print("User remains active after invoice payment:", user.phone_number, user.plan)
+            else:
+                print("No user found for invoice payment phone:", phone)
+
+    # 3. Renewal failed
+    elif event["type"] == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+
+        metadata = {}
+        if hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
+            if invoice.lines.data and hasattr(invoice.lines.data[0], "metadata"):
+                metadata = invoice.lines.data[0].metadata or {}
+
+        if not metadata and hasattr(invoice, "parent") and invoice.parent:
+            if hasattr(invoice.parent, "subscription_details") and invoice.parent.subscription_details:
+                if hasattr(invoice.parent.subscription_details, "metadata"):
+                    metadata = invoice.parent.subscription_details.metadata or {}
+
+        phone = metadata.get("phone") if metadata else None
+
+        print("Invoice payment failed for:", phone)
+
+        if phone:
+            user = User.query.filter_by(phone_number=phone).first()
+            if user:
+                print("User payment failure logged:", user.phone_number)
+
+    # 4. Subscription canceled / ended
+    elif event["type"] == "customer.subscription.deleted":
+        subscription = event["data"]["object"]
+
+        metadata = subscription.metadata or {}
+        phone = metadata.get("phone") if metadata else None
+
+        print("Subscription deleted:", phone)
+
+        if phone:
+            user = User.query.filter_by(phone_number=phone).first()
+            if user:
+                user.plan = "free"
+                db.session.commit()
+                print("User downgraded to free:", user.phone_number)
+            else:
+                print("No user found for canceled subscription:", phone)
 
     return {"status": "success"}
 

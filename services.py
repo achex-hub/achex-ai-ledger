@@ -56,7 +56,14 @@ def create_checkout_session(phone_number: str, plan: str) -> str:
         client_reference_id=phone_number,
         metadata={
             "plan": plan,
+            "phone": phone_number,
         },
+        subscription_data={
+            "metadata": {
+                "plan": plan,
+                "phone": phone_number,
+            }
+        }
     )
 
     print("Created Stripe checkout session:")
