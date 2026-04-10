@@ -528,11 +528,12 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        phone = session.client_reference_id
+        phone = getattr(session, "client_reference_id", None)
         plan = "starter"
 
-        if session.metadata and "plan" in session.metadata:
-            plan = session.metadata["plan"]
+        session_metadata = stripe_obj_to_dict(getattr(session, "metadata", None))
+        if session_metadata.get("plan"):
+            plan = session_metadata.get("plan")
 
         print("Checkout completed:", phone, plan)
 
@@ -553,18 +554,19 @@ def stripe_webhook():
     elif event["type"] == "invoice.paid":
         invoice = event["data"]["object"]
 
-        metadata = {}
-        if hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
-            if invoice.lines.data and hasattr(invoice.lines.data[0], "metadata"):
-                metadata = invoice.lines.data[0].metadata or {}
+        phone = None
+        plan = None
 
-        if not metadata and hasattr(invoice, "parent") and invoice.parent:
-            if hasattr(invoice.parent, "subscription_details") and invoice.parent.subscription_details:
-                if hasattr(invoice.parent.subscription_details, "metadata"):
-                    metadata = invoice.parent.subscription_details.metadata or {}
+        try:
+            parent = getattr(invoice, "parent", None)
+            subscription_details = getattr(parent, "subscription_details", None)
+            metadata = stripe_obj_to_dict(getattr(subscription_details, "metadata", None))
 
-        phone = metadata.get("phone") if metadata else None
-        plan = metadata.get("plan") if metadata else None
+            if metadata:
+                phone = metadata.get("phone")
+                plan = metadata.get("plan")
+        except Exception as e:
+            print("invoice.paid metadata read error:", str(e))
 
         print("Invoice paid:", phone, plan)
 
@@ -581,17 +583,17 @@ def stripe_webhook():
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
 
-        metadata = {}
-        if hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
-            if invoice.lines.data and hasattr(invoice.lines.data[0], "metadata"):
-                metadata = invoice.lines.data[0].metadata or {}
+        phone = None
 
-        if not metadata and hasattr(invoice, "parent") and invoice.parent:
-            if hasattr(invoice.parent, "subscription_details") and invoice.parent.subscription_details:
-                if hasattr(invoice.parent.subscription_details, "metadata"):
-                    metadata = invoice.parent.subscription_details.metadata or {}
+        try:
+            parent = getattr(invoice, "parent", None)
+            subscription_details = getattr(parent, "subscription_details", None)
+            metadata = stripe_obj_to_dict(getattr(subscription_details, "metadata", None))
 
-        phone = metadata.get("phone") if metadata else None
+            if metadata:
+                phone = metadata.get("phone")
+        except Exception as e:
+            print("invoice.payment_failed metadata read error:", str(e))
 
         print("Invoice payment failed for:", phone)
 
@@ -604,8 +606,8 @@ def stripe_webhook():
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
 
-        metadata = subscription.metadata or {}
-        phone = metadata.get("phone") if metadata else None
+        metadata = stripe_obj_to_dict(getattr(subscription, "metadata", None))
+        phone = metadata.get("phone")
 
         print("Subscription deleted:", phone)
 
