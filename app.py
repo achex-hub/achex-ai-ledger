@@ -60,6 +60,24 @@ def whatsapp_webhook():
     from_number = request.form.get("From", "").strip()
     message_sid = request.form.get("MessageSid", "").strip()
 
+    # GLOBAL DUPLICATE GUARD (Twilio retry protection)
+    if message_sid:
+        existing = Transaction.query.filter_by(
+            twilio_message_sid=message_sid
+        ).first()
+
+        if existing:
+            print("Webhook-level duplicate blocked")
+
+            resp = MessagingResponse()
+            msg = resp.message()
+
+            msg.body(
+                f"Already recorded: {existing.type.title()} — {existing.item.title()} — ${existing.total:.2f}\n\n"
+                "This message was already processed."
+            )
+            return str(resp)
+
     print("Incoming message:", incoming_message)
     print("From number:", from_number)
     print("Twilio MessageSid:", message_sid)
