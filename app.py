@@ -353,45 +353,6 @@ def whatsapp_webhook():
         )
         return str(resp)
 
-    limit = PLAN_LIMITS.get(user.plan, 50)
-    next_count = user.monthly_transaction_count + 1
-
-    soft_upsell_text = ""
-    if next_count >= 0.8 * limit and next_count < limit:
-        soft_upsell_text = (
-            "\n\n⚠️ You're close to your monthly limit.\n"
-            "Upgrade soon to avoid interruption."
-        )
-
-    transaction, was_duplicate = save_transaction(
-        user, parsed, incoming_message, message_sid
-    )
-
-    invite_line = ""
-    public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
-    if public_number and user.monthly_transaction_count % 5 == 0 and not was_duplicate:
-        invite_line = (
-            "\n\n🔥 You're tracking like a pro.\n"
-            "Invite a friend:\n"
-            f"https://wa.me/{public_number}"
-        )
-
-    status_prefix = "Recorded"
-    duplicate_note = ""
-
-    if was_duplicate:
-        status_prefix = "Already recorded"
-        duplicate_note = "\n\nThis message was already processed."
-
-    msg.body(
-        f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
-        "You're tracking your business in real time."
-        + duplicate_note
-        + soft_upsell_text
-        + invite_line
-    )
-    return str(resp)
-
     # SOFT UPSELL
     limit = PLAN_LIMITS.get(user.plan, 50)
     next_count = user.monthly_transaction_count + 1
