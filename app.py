@@ -58,7 +58,7 @@ def home():
 def whatsapp_webhook():
     incoming_message = request.form.get("Body", "").strip()
     from_number = request.form.get("From", "").strip()
-    message_sid = request.form.get("MessageSid", "").strip()    
+    message_sid = request.form.get("MessageSid", "").strip()
 
     print("Incoming message:", incoming_message)
     print("From number:", from_number)
@@ -231,16 +231,6 @@ def whatsapp_webhook():
         msg.body(f"Upgrade to {plan.title()} here:\n{upgrade_link}")
         return str(resp)
 
-    if "how" in normalized:
-        msg.body(
-            "📘 You can track your business like this:\n\n"
-            "• Sold coffee 10\n"
-            "• Bought milk 5\n"
-            "• summary\n\n"
-            "Try one now 👇"
-        )
-        return str(resp)
-
     # HARD PAYWALL
     if not user_can_add_transaction(user):
         starter_link = generate_upgrade_link(from_number, "starter")
@@ -256,22 +246,12 @@ def whatsapp_webhook():
         )
         return str(resp)
 
-    #SMART QUESTIONS   
+    # SMART QUESTIONS
     text = incoming_message.lower()
-
-    if "summary" in text:
-        summary = get_daily_summary(user)
-        msg.body(
-            summary +
-            "\n\n🚀 Want deeper insights?\nUpgrade to unlock analytics."
-        )
-        return str(resp)
-
 
     if "advice" in text or "insight" in text:
         if not is_premium(user):
             upgrade_link = generate_upgrade_link(from_number, "starter")
-
             msg.body(
                 "🔒 Advanced insights are a premium feature.\n\n"
                 "Upgrade to unlock:\n"
@@ -291,20 +271,71 @@ def whatsapp_webhook():
         msg.body(summary)
         return str(resp)
 
-    if "help" in text:
+        # MULTI-LINE TRANSACTION SUPPORT
+    lines = [normalize_text(line) for line in incoming_message.splitlines() if line.strip()]
+
+    if len(lines) > 1:
+        recorded_lines = []
+        total_recorded = 0.0
+
+        for i, line in enumerate(lines, start=1):
+            parsed = parse_transaction_with_ai(line)
+            print("Parsed line transaction:", parsed)
+
+            if not isinstance(parsed, dict):
+                continue
+
+            if parsed.get("transaction_type") not in ["income", "expense"]:
+                continue
+
+            if not parsed.get("item") or float(parsed.get("total", 0) or 0) <= 0:
+                continue
+
+            line_sid = f"{message_sid}:{i}" if message_sid else None
+
+            transaction, was_duplicate = save_transaction(
+                user, parsed, line, line_sid
+            )
+
+            if was_duplicate:
+                recorded_lines.append(
+                    f"- Already recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}"
+                )
+            else:
+                recorded_lines.append(
+                    f"- Recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}"
+                )
+                total_recorded += float(transaction.total or 0)
+
+        if not recorded_lines:
+            msg.body(
+                "I couldn't process those lines.\n\n"
+                "Send one transaction per line, like:\n"
+                "Sold coffee 10\n"
+                "Bought milk 5"
+            )
+            return str(resp)
+
         msg.body(
+            "Transactions processed:\n"
+            + "\n".join(recorded_lines)
+            + f"\n\nNew total recorded: ${total_recorded:.2f}"
+        )
+        return str(resp)
+
+    # SINGLE TRANSACTION PARSE
+    parsed = parse_transaction_with_ai(incoming_message)
+    print("Parsed transaction:", parsed)
+
+    if not isinstance(parsed, dict):
+        msg.body(
+            "I couldn't understand that.\n\n"
             "Try:\n"
             "• Sold coffee 10\n"
             "• Bought milk 5\n"
-            "• summary\n"
-            "• How much did I make today?\n"
-            "• insight"
+            "• summary"
         )
-        return str(resp)    
-
-    # PARSE TRANSACTION
-    parsed = parse_transaction_with_ai(incoming_message)
-    print("Parsed transaction:", parsed)
+        return str(resp)
 
     if parsed.get("transaction_type") not in ["income", "expense"]:
         ai_reply = handle_general_question(user, incoming_message)
@@ -320,17 +351,46 @@ def whatsapp_webhook():
             "• summary\n\n"
             "Or type help"
         )
-        return str(resp)    
+        return str(resp)
 
-    #DUPLICATE CHECK
-    if message_sid:
-        existing_txn = Transaction.query.filter_by(twilio_message_sid=message_sid).first()
-        if existing_txn:
-            msg.body(
-                f"Recorded: {existing_txn.type.title()} — {existing_txn.item.title()} — ${existing_txn.total:.2f}\n\n"
-                "This message was already processed."
-            )
-            return str(resp)
+    limit = PLAN_LIMITS.get(user.plan, 50)
+    next_count = user.monthly_transaction_count + 1
+
+    soft_upsell_text = ""
+    if next_count >= 0.8 * limit and next_count < limit:
+        soft_upsell_text = (
+            "\n\n⚠️ You're close to your monthly limit.\n"
+            "Upgrade soon to avoid interruption."
+        )
+
+    transaction, was_duplicate = save_transaction(
+        user, parsed, incoming_message, message_sid
+    )
+
+    invite_line = ""
+    public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
+    if public_number and user.monthly_transaction_count % 5 == 0 and not was_duplicate:
+        invite_line = (
+            "\n\n🔥 You're tracking like a pro.\n"
+            "Invite a friend:\n"
+            f"https://wa.me/{public_number}"
+        )
+
+    status_prefix = "Recorded"
+    duplicate_note = ""
+
+    if was_duplicate:
+        status_prefix = "Already recorded"
+        duplicate_note = "\n\nThis message was already processed."
+
+    msg.body(
+        f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
+        "You're tracking your business in real time."
+        + duplicate_note
+        + soft_upsell_text
+        + invite_line
+    )
+    return str(resp)
 
     # SOFT UPSELL
     limit = PLAN_LIMITS.get(user.plan, 50)
@@ -343,22 +403,32 @@ def whatsapp_webhook():
             "Upgrade soon to avoid interruption."
         )
 
-    # SAVE TRANSACTION
-    transaction = save_transaction(user, parsed, incoming_message, message_sid)
+    # SAVE SINGLE TRANSACTION
+    transaction, was_duplicate = save_transaction(
+        user, parsed, incoming_message, message_sid
+    )
 
     # FRIEND INVITE
     invite_line = ""
     public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
-    if public_number and user.monthly_transaction_count % 5 == 0:
+    if public_number and user.monthly_transaction_count % 5 == 0 and not was_duplicate:
         invite_line = (
             "\n\n🔥 You're tracking like a pro.\n"
             "Invite a friend:\n"
             f"https://wa.me/{public_number}"
         )
 
+    status_prefix = "Recorded"
+    duplicate_note = ""
+
+    if was_duplicate:
+        status_prefix = "Already recorded"
+        duplicate_note = "\n\nThis message was already processed."
+
     msg.body(
-        f"Recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
+        f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
         "You're tracking your business in real time."
+        + duplicate_note
         + soft_upsell_text
         + invite_line
     )

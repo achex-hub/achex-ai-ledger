@@ -139,6 +139,28 @@ User message:
 
     try:
         parsed = json.loads(raw_output)
+
+        if isinstance(parsed, list):
+            if len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
+            else:
+                return {
+                    "item": "",
+                    "quantity": 0,
+                    "unit_price": 0,
+                    "total": 0,
+                    "transaction_type": "unknown"
+                }
+
+        if not isinstance(parsed, dict):
+            return {
+                "item": "",
+                "quantity": 0,
+                "unit_price": 0,
+                "total": 0,
+                "transaction_type": "unknown"
+            }
+
     except json.JSONDecodeError:
         parsed = {
             "item": "",
@@ -172,6 +194,60 @@ User message:
 
 
 def save_transaction(user, parsed, raw_message, twilio_message_sid=None):
+    from datetime import datetime, timezone
+
+    normalized_message = " ".join((raw_message or "").strip().lower().split())
+
+    # Exact Twilio retry protection
+    if twilio_message_sid:
+        existing_sid_txn = Transaction.query.filter_by(
+            twilio_message_sid=twilio_message_sid
+        ).first()
+        if existing_sid_txn:
+            print("Duplicate detected by MessageSid")
+            return existing_sid_txn, True
+
+    # Fast same-user double-send protection
+    recent_txns = Transaction.query.filter_by(user_id=user.id).order_by(
+        Transaction.created_at.desc()
+    ).limit(5).all()
+
+    now_utc = datetime.now(timezone.utc)
+
+    for recent_txn in recent_txns:
+        recent_message = " ".join((recent_txn.raw_message or "").strip().lower().split())
+
+        recent_created = recent_txn.created_at
+        if recent_created is None:
+            continue
+
+        if recent_created.tzinfo is None:
+            recent_created = recent_created.replace(tzinfo=timezone.utc)
+
+        seconds_apart = abs((now_utc - recent_created).total_seconds())
+
+        same_message = recent_message == normalized_message
+        same_type = recent_txn.type == parsed["transaction_type"]
+        same_item = (recent_txn.item or "").strip().lower() == (parsed["item"] or "").strip().lower()
+        same_total = float(recent_txn.total or 0) == float(parsed.get("total", 0) or 0)
+
+        print(
+            "Duplicate check:",
+            {
+                "recent_message": recent_message,
+                "normalized_message": normalized_message,
+                "seconds_apart": seconds_apart,
+                "same_message": same_message,
+                "same_type": same_type,
+                "same_item": same_item,
+                "same_total": same_total,
+            }
+        )
+
+        if seconds_apart <= 10 and same_message and same_type and same_item and same_total:
+            print("Duplicate detected (same message within 10s)")
+            return recent_txn, True
+
     transaction = Transaction(
         user_id=user.id,
         type=parsed["transaction_type"],
@@ -192,7 +268,7 @@ def save_transaction(user, parsed, raw_message, twilio_message_sid=None):
     print("Saved transaction total:", transaction.total)
     print("Saved transaction unit_price:", transaction.unit_price)
 
-    return transaction
+    return transaction, False
 
 
 def get_summary_for_range(user: User, start_dt: datetime, end_dt: datetime) -> dict:
@@ -364,6 +440,11 @@ def help_message() -> str:
         "- month\n"
         "- export csv month\n"
         "- export pdf month\n\n"
+        "You can also send multiple transactions in one message, one per line.\n\n"
+        "Example:\n"
+        "Sold coffee 10\n"
+        "Bought milk 5\n"
+        "Sold tea 7\n\n"
         "Send your first transaction now."
     )
 
