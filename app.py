@@ -384,14 +384,36 @@ def whatsapp_webhook():
     soft_upsell_text = ""
     if next_count >= 0.8 * limit and next_count < limit:
         soft_upsell_text = (
-            "\n\n⚠️ You're close to your monthly limit.\n"
-            "Upgrade soon to avoid interruption."
+            "\n\n⚠️ You're about to lose access to tracking.\n"
+            "Upgrade now to avoid interruption."
         )
 
     # SAVE SINGLE TRANSACTION
     transaction, was_duplicate = save_transaction(
         user, parsed, incoming_message, message_sid
     )
+
+    # ✅ FIRST SUCCESS MOMENT (ADD HERE)
+    if not was_duplicate and user.monthly_transaction_count == 3:
+        msg.body(
+            "🔥 You're already tracking your business in real time.\n\n"
+            "Most people never get this far.\n\n"
+            "Type 'summary' to see your profit so far.\n\n"
+            "You're building something real."
+        )
+        return str(resp)
+
+    #MOMENT-BASED UPGRADE PUSH
+    if not is_premium(user) and user.monthly_transaction_count in [3, 5, 10]:
+        upgrade_link = generate_upgrade_link(from_number, "starter")
+
+        msg.body(
+            f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
+            "🔥 You're actively tracking your business.\n"
+            "Unlock insights, profit tracking, and unlimited logs.\n\n"
+            f"Upgrade here:\n{upgrade_link}"
+        )
+        return str(resp)
 
     # FRIEND INVITE
     invite_line = ""
@@ -400,7 +422,7 @@ def whatsapp_webhook():
         invite_line = (
             "\n\n🔥 You're tracking like a pro.\n"
             "Invite a friend:\n"
-            f"https://wa.me/{public_number}"
+            f"https://wa.me/{public_number}?text=I%20just%20started%20tracking%20my%20business%20with%20achex"
         )
 
     status_prefix = "Recorded"
