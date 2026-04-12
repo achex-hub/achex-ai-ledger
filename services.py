@@ -43,6 +43,11 @@ def create_checkout_session(phone_number: str, plan: str) -> str:
     if not base_url:
         raise ValueError("APP_BASE_URL is not configured")
 
+    print("Creating checkout session with:")
+    print("  phone_number:", phone_number)
+    print("  plan:", plan)
+    print("  price_id:", price_id)
+
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=[
@@ -70,6 +75,7 @@ def create_checkout_session(phone_number: str, plan: str) -> str:
     print("  phone_number:", phone_number)
     print("  plan:", plan)
     print("  session_id:", session.id)
+    print("  session_metadata:", dict(session.metadata) if session.metadata else {})
     print("  client_reference_id:", session.client_reference_id)
     print("  session_url:", session.url)
 
