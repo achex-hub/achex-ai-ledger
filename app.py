@@ -542,6 +542,47 @@ def stripe_webhook():
     sig_header = request.headers.get("Stripe-Signature")
     endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
+    # Optional upgrade: fallback mapping from Stripe price IDs to your internal plans
+    PRICE_TO_PLAN = {
+        os.getenv("STRIPE_STARTER_PRICE_ID"): "starter",
+        os.getenv("STRIPE_PRO_PRICE_ID"): "pro",
+    }
+
+    def get_plan_from_line_items(line_items_data):
+        """
+        Safely extract internal plan name from Stripe line items using price ID.
+        """
+        try:
+            if not line_items_data:
+                return None
+
+            first_item = line_items_data[0]
+            price_obj = first_item.get("price", {}) if isinstance(first_item, dict) else getattr(first_item, "price", None)
+
+            if isinstance(price_obj, dict):
+                price_id = price_obj.get("id")
+            else:
+                price_id = getattr(price_obj, "id", None)
+
+            return PRICE_TO_PLAN.get(price_id)
+        except Exception as e:
+            print("Price-to-plan fallback error:", str(e))
+            return None
+
+    def safe_metadata(obj):
+        """
+        Convert Stripe metadata-like objects into a plain dict safely.
+        """
+        try:
+            if not obj:
+                return {}
+            return dict(obj)
+        except Exception:
+            try:
+                return obj.to_dict()
+            except Exception:
+                return {}
+
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, endpoint_secret
@@ -552,49 +593,82 @@ def stripe_webhook():
 
     print("EVENT TYPE:", event["type"])
 
-    # 1. Initial successful checkout
+    # 1) Initial checkout success
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        phone = getattr(session, "client_reference_id", None)
-        plan = "starter"
+        # Extra safety logging
+        print("Checkout session id:", session.get("id"))
+        print("Checkout client_reference_id:", session.get("client_reference_id"))
+        print("Stripe metadata:", safe_metadata(session.get("metadata")))
 
-        session_metadata = stripe_obj_to_dict(getattr(session, "metadata", None))
-        if session_metadata.get("plan"):
-            plan = session_metadata.get("plan")
+        phone = session.get("client_reference_id")
+        metadata = safe_metadata(session.get("metadata"))
+
+        # Primary source of truth
+        plan = metadata.get("plan")
+        phone_from_metadata = metadata.get("phone")
+
+        # Optional fallback: if client_reference_id missing, use metadata phone
+        if not phone and phone_from_metadata:
+            phone = phone_from_metadata
+
+        # Optional fallback: derive plan from line items if metadata missing
+        if not plan:
+            try:
+                session_id = session.get("id")
+                line_items = stripe.checkout.Session.list_line_items(session_id, limit=5)
+                print("Line items fetched for fallback:", line_items.data)
+                plan = get_plan_from_line_items(line_items.data)
+            except Exception as e:
+                print("Line item fallback error:", str(e))
 
         print("Checkout completed:", phone, plan)
 
-        if phone:
-            user = User.query.filter_by(phone_number=phone).first()
+        if not phone:
+            print("No phone found in checkout session")
+            return {"status": "success"}, 200
 
-            if user:
-                user.plan = plan
-                user.monthly_transaction_count = 0
-                db.session.commit()
-                print("User upgraded automatically:", user.phone_number, user.plan)
-            else:
-                print("No user found for phone:", phone)
+        if not plan:
+            print("No plan found in checkout session metadata or line items")
+            return {"status": "success"}, 200
+
+        user = User.query.filter_by(phone_number=phone).first()
+        if user:
+            user.plan = plan
+            user.monthly_transaction_count = 0
+            db.session.commit()
+            print("User upgraded automatically:", user.phone_number, user.plan)
         else:
-            print("No client_reference_id found in checkout session")
+            print("No user found for phone:", phone)
 
-    # 2. Renewal succeeded
+    # 2) Renewal succeeded
     elif event["type"] == "invoice.paid":
         invoice = event["data"]["object"]
 
-        phone = None
-        plan = None
+        print("Invoice id:", invoice.get("id"))
+        print("Invoice metadata:", safe_metadata(invoice.get("metadata")))
 
-        try:
-            parent = getattr(invoice, "parent", None)
-            subscription_details = getattr(parent, "subscription_details", None)
-            metadata = stripe_obj_to_dict(getattr(subscription_details, "metadata", None))
+        metadata = safe_metadata(invoice.get("metadata"))
+        phone = metadata.get("phone")
+        plan = metadata.get("plan")
 
-            if metadata:
-                phone = metadata.get("phone")
-                plan = metadata.get("plan")
-        except Exception as e:
-            print("invoice.paid metadata read error:", str(e))
+        # Fallback: look inside invoice lines
+        if (not phone or not plan) and invoice.get("lines") and invoice["lines"].get("data"):
+            try:
+                first_line = invoice["lines"]["data"][0]
+                line_metadata = safe_metadata(first_line.get("metadata"))
+                print("Invoice line metadata:", line_metadata)
+
+                if not phone:
+                    phone = line_metadata.get("phone")
+                if not plan:
+                    plan = line_metadata.get("plan")
+
+                if not plan:
+                    plan = get_plan_from_line_items(invoice["lines"]["data"])
+            except Exception as e:
+                print("Invoice lines fallback error:", str(e))
 
         print("Invoice paid:", phone, plan)
 
@@ -606,22 +680,28 @@ def stripe_webhook():
                 print("User remains active after invoice payment:", user.phone_number, user.plan)
             else:
                 print("No user found for invoice payment phone:", phone)
+        else:
+            print("Missing phone or plan on invoice.paid event")
 
-    # 3. Renewal failed
+    # 3) Renewal failed
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
 
-        phone = None
+        print("Invoice payment failed id:", invoice.get("id"))
+        print("Invoice failed metadata:", safe_metadata(invoice.get("metadata")))
 
-        try:
-            parent = getattr(invoice, "parent", None)
-            subscription_details = getattr(parent, "subscription_details", None)
-            metadata = stripe_obj_to_dict(getattr(subscription_details, "metadata", None))
+        metadata = safe_metadata(invoice.get("metadata"))
+        phone = metadata.get("phone")
 
-            if metadata:
-                phone = metadata.get("phone")
-        except Exception as e:
-            print("invoice.payment_failed metadata read error:", str(e))
+        # Fallback: invoice lines metadata
+        if not phone and invoice.get("lines") and invoice["lines"].get("data"):
+            try:
+                first_line = invoice["lines"]["data"][0]
+                line_metadata = safe_metadata(first_line.get("metadata"))
+                print("Invoice failed line metadata:", line_metadata)
+                phone = line_metadata.get("phone")
+            except Exception as e:
+                print("Invoice failed lines fallback error:", str(e))
 
         print("Invoice payment failed for:", phone)
 
@@ -629,15 +709,20 @@ def stripe_webhook():
             user = User.query.filter_by(phone_number=phone).first()
             if user:
                 print("User payment failure logged:", user.phone_number)
+            else:
+                print("No user found for failed payment phone:", phone)
 
-    # 4. Subscription canceled / ended
+    # 4) Subscription canceled / ended
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
 
-        metadata = stripe_obj_to_dict(getattr(subscription, "metadata", None))
-        phone = metadata.get("phone")
+        metadata = safe_metadata(subscription.get("metadata"))
+        print("Subscription deleted metadata:", metadata)
 
-        print("Subscription deleted:", phone)
+        phone = metadata.get("phone")
+        plan = metadata.get("plan")
+
+        print("Subscription deleted:", phone, plan)
 
         if phone:
             user = User.query.filter_by(phone_number=phone).first()
@@ -648,7 +733,7 @@ def stripe_webhook():
             else:
                 print("No user found for canceled subscription:", phone)
 
-    return {"status": "success"}
+    return {"status": "success"}, 200
 
 
 @app.route("/stripe-success")
@@ -719,11 +804,36 @@ def set_email():
 @app.route("/upgrade/<plan>/<path:phone>")
 def upgrade_checkout(plan, phone):
     try:
+        plan = (plan or "").strip().lower()
+        phone = (phone or "").strip()
+
         if plan not in ["starter", "pro"]:
             return {"error": "invalid plan"}, 400
 
+        if not phone:
+            return {"error": "missing phone"}, 400
+
+        # Normalize phone into the same format used in your DB
+        if not phone.startswith("whatsapp:"):
+            if phone.startswith("+"):
+                phone = f"whatsapp:{phone}"
+            else:
+                phone = f"whatsapp:+{phone}"
+
+        print("Upgrade route requested:")
+        print("  plan:", plan)
+        print("  normalized phone:", phone)
+
+        user = User.query.filter_by(phone_number=phone).first()
+        if not user:
+            print("No user found for upgrade route:", phone)
+            return {"error": "user not found", "phone": phone}, 404
+
         checkout_url = create_checkout_session(phone, plan)
+
+        print("Redirecting to Stripe checkout for:", phone, plan)
         return redirect(checkout_url)
+
     except Exception as e:
         print("Upgrade route error:", str(e))
         return {"error": str(e)}, 400
