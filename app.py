@@ -535,7 +535,6 @@ def reset_count():
         "monthly_transaction_count": user.monthly_transaction_count
     }
 
-
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
@@ -548,20 +547,22 @@ def stripe_webhook():
         os.getenv("STRIPE_PRO_PRICE_ID"): "pro",
     }
 
+    def safe_metadata(obj):
+        try:
+            return dict(obj) if obj else {}
+        except Exception:
+            return {}
+
     def get_plan_from_line_items(line_items_data):
-        """
-        Safely extract internal plan name from Stripe line items using price ID.
-        """
         try:
             if not line_items_data:
                 return None
 
             first_item = line_items_data[0]
-            price_obj = first_item.get("price", {}) if isinstance(first_item, dict) else getattr(first_item, "price", None)
+            price_obj = getattr(first_item, "price", None)
 
-            if isinstance(price_obj, dict):
-                price_id = price_obj.get("id")
-            else:
+            price_id = None
+            if price_obj is not None:
                 price_id = getattr(price_obj, "id", None)
 
             return PRICE_TO_PLAN.get(price_id)
@@ -569,41 +570,25 @@ def stripe_webhook():
             print("Price-to-plan fallback error:", str(e))
             return None
 
-    def safe_metadata(obj):
-        """
-        Convert Stripe metadata-like objects into a plain dict safely.
-        """
-        try:
-            if not obj:
-                return {}
-            return dict(obj)
-        except Exception:
-            try:
-                return obj.to_dict()
-            except Exception:
-                return {}
-
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
     except Exception as e:
         print("Webhook error:", str(e))
         return {"error": str(e)}, 400
 
     print("EVENT TYPE:", event["type"])
 
-    # 1) Initial checkout success
+    # 1) Initial checkout success 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
         # Extra safety logging
-        print("Checkout session id:", session.get("id"))
-        print("Checkout client_reference_id:", session.get("client_reference_id"))
-        print("Stripe metadata:", safe_metadata(session.get("metadata")))
+        print("Checkout session id:", session.id)
+        print("Checkout client_reference_id:", session.client_reference_id)
+        print("Stripe metadata:", safe_metadata(session.metadata))
 
-        phone = session.get("client_reference_id")
-        metadata = safe_metadata(session.get("metadata"))
+        phone = session.client_reference_id
+        metadata = safe_metadata(session.metadata)
 
         # Primary source of truth
         plan = metadata.get("plan")
@@ -613,11 +598,10 @@ def stripe_webhook():
         if not phone and phone_from_metadata:
             phone = phone_from_metadata
 
-        # Optional fallback: derive plan from line items if metadata missing
+        # Optional fallback: derive plan from line items if metadata missing  
         if not plan:
             try:
-                session_id = session.get("id")
-                line_items = stripe.checkout.Session.list_line_items(session_id, limit=5)
+                line_items = stripe.checkout.Session.list_line_items(session.id, limit=5)
                 print("Line items fetched for fallback:", line_items.data)
                 plan = get_plan_from_line_items(line_items.data)
             except Exception as e:
@@ -646,27 +630,28 @@ def stripe_webhook():
     elif event["type"] == "invoice.paid":
         invoice = event["data"]["object"]
 
-        print("Invoice id:", invoice.get("id"))
-        print("Invoice metadata:", safe_metadata(invoice.get("metadata")))
+        print("Invoice id:", invoice.id)
+        print("Invoice metadata:", safe_metadata(invoice.metadata))
 
-        metadata = safe_metadata(invoice.get("metadata"))
+        metadata = safe_metadata(invoice.metadata)
         phone = metadata.get("phone")
         plan = metadata.get("plan")
 
         # Fallback: look inside invoice lines
-        if (not phone or not plan) and invoice.get("lines") and invoice["lines"].get("data"):
+        if (not phone or not plan) and hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
             try:
-                first_line = invoice["lines"]["data"][0]
-                line_metadata = safe_metadata(first_line.get("metadata"))
-                print("Invoice line metadata:", line_metadata)
+                if invoice.lines.data:
+                    first_line = invoice.lines.data[0]
+                    line_metadata = safe_metadata(first_line.metadata)
+                    print("Invoice line metadata:", line_metadata)
 
-                if not phone:
-                    phone = line_metadata.get("phone")
-                if not plan:
-                    plan = line_metadata.get("plan")
+                    if not phone:
+                        phone = line_metadata.get("phone")
+                    if not plan:
+                        plan = line_metadata.get("plan")
 
-                if not plan:
-                    plan = get_plan_from_line_items(invoice["lines"]["data"])
+                    if not plan:
+                        plan = get_plan_from_line_items(invoice.lines.data)
             except Exception as e:
                 print("Invoice lines fallback error:", str(e))
 
@@ -687,19 +672,20 @@ def stripe_webhook():
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
 
-        print("Invoice payment failed id:", invoice.get("id"))
-        print("Invoice failed metadata:", safe_metadata(invoice.get("metadata")))
+        print("Invoice payment failed id:", invoice.id)
+        print("Invoice failed metadata:", safe_metadata(invoice.metadata))
 
-        metadata = safe_metadata(invoice.get("metadata"))
+        metadata = safe_metadata(invoice.metadata)
         phone = metadata.get("phone")
 
         # Fallback: invoice lines metadata
-        if not phone and invoice.get("lines") and invoice["lines"].get("data"):
+        if not phone and hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
             try:
-                first_line = invoice["lines"]["data"][0]
-                line_metadata = safe_metadata(first_line.get("metadata"))
-                print("Invoice failed line metadata:", line_metadata)
-                phone = line_metadata.get("phone")
+                if invoice.lines.data:
+                    first_line = invoice.lines.data[0]
+                    line_metadata = safe_metadata(first_line.metadata)
+                    print("Invoice failed line metadata:", line_metadata)
+                    phone = line_metadata.get("phone")
             except Exception as e:
                 print("Invoice failed lines fallback error:", str(e))
 
@@ -716,7 +702,7 @@ def stripe_webhook():
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
 
-        metadata = safe_metadata(subscription.get("metadata"))
+        metadata = safe_metadata(subscription.metadata)
         print("Subscription deleted metadata:", metadata)
 
         phone = metadata.get("phone")
