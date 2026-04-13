@@ -250,7 +250,7 @@ def whatsapp_webhook():
         return str(resp)
 
     if normalized in ["upgrade starter", "upgrade pro"]:
-        plan = normalized.split()[1]
+        #plan = normalized.split()[1]
         #upgrade_link = generate_upgrade_link(from_number, plan)
         starter_link = generate_upgrade_link(from_number, "starter")
         pro_link = generate_upgrade_link(from_number, "pro")
