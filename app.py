@@ -554,7 +554,6 @@ def stripe_webhook():
 
     print("EVENT TYPE:", event["type"])
 
-    # 1) Initial checkout success = main upgrade logic
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
@@ -579,7 +578,12 @@ def stripe_webhook():
             except Exception as e:
                 print("Line item fallback error:", str(e))
 
+        stripe_customer_id = getattr(session, "customer", None)
+        stripe_subscription_id = getattr(session, "subscription", None)
+
         print("Checkout completed:", phone, plan)
+        print("Stripe customer id:", stripe_customer_id)
+        print("Stripe subscription id:", stripe_subscription_id)
 
         if not phone:
             print("No phone found in checkout session")
@@ -593,48 +597,97 @@ def stripe_webhook():
         if user:
             user.plan = plan
             user.monthly_transaction_count = 0
+
+            if stripe_customer_id:
+                user.stripe_customer_id = stripe_customer_id
+
+            if stripe_subscription_id:
+                user.stripe_subscription_id = stripe_subscription_id
+
             db.session.commit()
             print("User upgraded automatically:", user.phone_number, user.plan)
         else:
             print("No user found for phone:", phone)
 
-    # 2) Renewal succeeded = log only for now
     elif event["type"] == "invoice.paid":
         invoice = event["data"]["object"]
+
         print("Invoice id:", invoice.id)
         print("Invoice metadata:", safe_metadata(invoice.metadata))
-        print("Invoice paid received.")
-        print("Note: no user update attempted because invoice metadata is empty in your current Stripe flow.")
 
-    # 3) Renewal failed = log only for now
+        stripe_customer_id = getattr(invoice, "customer", None)
+        stripe_subscription_id = getattr(invoice, "subscription", None)
+
+        print("Invoice paid customer id:", stripe_customer_id)
+        print("Invoice paid subscription id:", stripe_subscription_id)
+
+        user = None
+
+        if stripe_subscription_id:
+            user = User.query.filter_by(stripe_subscription_id=stripe_subscription_id).first()
+
+        if not user and stripe_customer_id:
+            user = User.query.filter_by(stripe_customer_id=stripe_customer_id).first()
+
+        if user:
+            print("Invoice paid matched user:", user.phone_number, user.plan)
+            db.session.commit()
+            print("User remains active after invoice payment:", user.phone_number, user.plan)
+        else:
+            print("No user matched for invoice.paid")
+
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
+
         print("Invoice payment failed id:", invoice.id)
         print("Invoice failed metadata:", safe_metadata(invoice.metadata))
-        print("Invoice payment failed received.")
 
-    # 4) Subscription canceled / ended
+        stripe_customer_id = getattr(invoice, "customer", None)
+        stripe_subscription_id = getattr(invoice, "subscription", None)
+
+        print("Invoice failed customer id:", stripe_customer_id)
+        print("Invoice failed subscription id:", stripe_subscription_id)
+
+        user = None
+
+        if stripe_subscription_id:
+            user = User.query.filter_by(stripe_subscription_id=stripe_subscription_id).first()
+
+        if not user and stripe_customer_id:
+            user = User.query.filter_by(stripe_customer_id=stripe_customer_id).first()
+
+        if user:
+            print("User payment failure logged:", user.phone_number)
+        else:
+            print("No user matched for invoice.payment_failed")
+
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
-        metadata = safe_metadata(subscription.metadata)
 
+        metadata = safe_metadata(subscription.metadata)
         print("Subscription deleted metadata:", metadata)
 
-        phone = metadata.get("phone")
-        plan = metadata.get("plan")
+        stripe_customer_id = getattr(subscription, "customer", None)
+        stripe_subscription_id = getattr(subscription, "id", None)
 
-        print("Subscription deleted:", phone, plan)
+        print("Subscription deleted customer id:", stripe_customer_id)
+        print("Subscription deleted subscription id:", stripe_subscription_id)
 
-        if phone:
-            user = User.query.filter_by(phone_number=phone).first()
-            if user:
-                user.plan = "free"
-                db.session.commit()
-                print("User downgraded to free:", user.phone_number)
-            else:
-                print("No user found for canceled subscription:", phone)
+        user = None
+
+        if stripe_subscription_id:
+            user = User.query.filter_by(stripe_subscription_id=stripe_subscription_id).first()
+
+        if not user and stripe_customer_id:
+            user = User.query.filter_by(stripe_customer_id=stripe_customer_id).first()
+
+        if user:
+            user.plan = "free"
+            user.stripe_subscription_id = None
+            db.session.commit()
+            print("User downgraded to free:", user.phone_number)
         else:
-            print("No phone found on canceled subscription metadata")
+            print("No user matched for canceled subscription")
 
     return {"status": "success"}, 200
 
