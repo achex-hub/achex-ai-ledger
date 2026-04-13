@@ -78,7 +78,6 @@ def create_checkout_session(phone_number: str, plan: str) -> str:
     print("  session_metadata:", dict(session.metadata) if session.metadata else {})
     print("  client_reference_id:", session.client_reference_id)
     print("  session_url:", session.url)
-
     return session.url
 
 

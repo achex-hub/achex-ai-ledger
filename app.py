@@ -393,28 +393,6 @@ def whatsapp_webhook():
         user, parsed, incoming_message, message_sid
     )
 
-    # ✅ FIRST SUCCESS MOMENT (ADD HERE)
-    if not was_duplicate and user.monthly_transaction_count == 3:
-        msg.body(
-            "🔥 You're already tracking your business in real time.\n\n"
-            "Most people never get this far.\n\n"
-            "Type 'summary' to see your profit so far.\n\n"
-            "You're building something real."
-        )
-        return str(resp)
-
-    #MOMENT-BASED UPGRADE PUSH
-    if not is_premium(user) and user.monthly_transaction_count in [3, 5, 10]:
-        upgrade_link = generate_upgrade_link(from_number, "starter")
-
-        msg.body(
-            f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
-            "🔥 You're actively tracking your business.\n"
-            "Unlock insights, profit tracking, and unlimited logs.\n\n"
-            f"Upgrade here:\n{upgrade_link}"
-        )
-        return str(resp)
-
     # FRIEND INVITE
     invite_line = ""
     public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
@@ -422,9 +400,10 @@ def whatsapp_webhook():
         invite_line = (
             "\n\n🔥 You're tracking like a pro.\n"
             "Invite a friend:\n"
-            f"https://wa.me/{public_number}?text=I%20just%20started%20tracking%20my%20business%20with%20achex"
+            f"https://wa.me/{public_number}"
         )
 
+    # DUPLICATE MESSAGE TEXT
     status_prefix = "Recorded"
     duplicate_note = ""
 
@@ -763,6 +742,7 @@ def set_email():
     phone = request.args.get("phone", "").strip()
     email = request.args.get("email", "").strip().lower()
 
+
     if not phone or not email:
         return {"error": "phone and email are required"}, 400
 
@@ -799,7 +779,7 @@ def upgrade_checkout(plan, phone):
         if not phone:
             return {"error": "missing phone"}, 400
 
-        # Normalize phone into the same format used in your DB
+        # Normalize phone into DB format
         if not phone.startswith("whatsapp:"):
             if phone.startswith("+"):
                 phone = f"whatsapp:{phone}"
@@ -817,11 +797,19 @@ def upgrade_checkout(plan, phone):
 
         checkout_url = create_checkout_session(phone, plan)
 
+        print("Checkout URL returned:", checkout_url)
+
+        if not checkout_url:
+            print("Stripe did not return a checkout URL")
+            return {"error": "missing checkout url"}, 500
+
         print("Redirecting to Stripe checkout for:", phone, plan)
-        return redirect(checkout_url)
+        return redirect(checkout_url, code=302)
 
     except Exception as e:
-        print("Upgrade route error:", str(e))
+        print("Upgrade route error type:", type(e).__name__)
+        print("Upgrade route error repr:", repr(e))
+        print("Upgrade route error str:", str(e))
         return {"error": str(e)}, 400
 
 
