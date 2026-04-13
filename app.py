@@ -237,7 +237,7 @@ def whatsapp_webhook():
         )
         return str(resp)
 
-    if any(word in normalized for word in ["price", "cost", "pricing", "plan", "plans", "upgrade"]):
+    if any(word in normalized for word in ["price", "cost", "pricing", "plan", "plans"]):
         msg.body(
             "💰 Plans:\n\n"
             "Free → limited usage\n"
@@ -250,14 +250,19 @@ def whatsapp_webhook():
         return str(resp)
 
     if normalized in ["upgrade starter", "upgrade pro"]:
-        #plan = normalized.split()[1]
-        #upgrade_link = generate_upgrade_link(from_number, plan)
+        plan = normalized.split()[1]
+        upgrade_link = generate_upgrade_link(from_number, plan)
+        msg.body(f"Upgrade to {plan.title()} here:\n{upgrade_link}"
+                f"Upgrade to Pro here:\n{pro_link}"
+        )
+        return str(resp)
+
+    if any(phrase in normalized for phrase in ["upgrade", "upgrade starter", "upgrade pro"])
         starter_link = generate_upgrade_link(from_number, "starter")
         pro_link = generate_upgrade_link(from_number, "pro")
         msg.body(f"Upgrade to Starter here:\n{starter_link}"
                 f"Upgrade to Pro here:\n{pro_link}"
         )
-
         return str(resp)
 
     # HARD PAYWALL
