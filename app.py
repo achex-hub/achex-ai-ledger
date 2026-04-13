@@ -755,5 +755,30 @@ def upgrade_checkout(plan, phone):
 def download_export(filename):
     return send_from_directory("exports", filename, as_attachment=True)
 
+
+@app.route("/admin/add-stripe-user-columns", methods=["GET"])
+def add_stripe_user_columns():
+    token = request.args.get("token", "").strip()
+
+    if token != os.getenv("ADMIN_REBUILD_TOKEN"):
+        return {"error": "unauthorized"}, 403
+
+    with db.engine.begin() as conn:
+        conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);"
+        )
+        conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255);"
+        )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_stripe_customer_id ON users (stripe_customer_id);"
+        )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_stripe_subscription_id ON users (stripe_subscription_id);"
+        )
+
+    return {"message": "Stripe columns added to users table"}
+
+
 if __name__ == "__main__":
     app.run(debug=True)
