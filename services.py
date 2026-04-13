@@ -35,7 +35,6 @@ PLAN_PRICE_IDS = {
 
 def create_checkout_session(phone_number: str, plan: str) -> str:
     price_id = PLAN_PRICE_IDS.get(plan)
-
     if not price_id:
         raise ValueError(f"No Stripe price ID configured for plan: {plan}")
 
@@ -75,9 +74,10 @@ def create_checkout_session(phone_number: str, plan: str) -> str:
     print("  phone_number:", phone_number)
     print("  plan:", plan)
     print("  session_id:", session.id)
-    print("  session_metadata:", dict(session.metadata) if session.metadata else {})
+    print("  session_metadata:", session.metadata if session.metadata else {})
     print("  client_reference_id:", session.client_reference_id)
     print("  session_url:", session.url)
+
     return session.url
 
 
