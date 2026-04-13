@@ -539,12 +539,18 @@ def stripe_webhook():
 
             first_item = line_items_data[0]
             price_obj = getattr(first_item, "price", None)
-            price_id = getattr(price_obj, "id", None) if price_obj else None
+
+            if not price_obj:
+                return None
+
+            price_id = getattr(price_obj, "id", None)
 
             return PRICE_TO_PLAN.get(price_id)
+
         except Exception as e:
             print("Price-to-plan fallback error:", str(e))
             return None
+
 
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
