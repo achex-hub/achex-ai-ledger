@@ -514,13 +514,13 @@ def reset_count():
         "monthly_transaction_count": user.monthly_transaction_count
     }
 
+
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
     endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-    # Optional upgrade: fallback mapping from Stripe price IDs to your internal plans
     PRICE_TO_PLAN = {
         os.getenv("STRIPE_STARTER_PRICE_ID"): "starter",
         os.getenv("STRIPE_PRO_PRICE_ID"): "pro",
@@ -539,10 +539,7 @@ def stripe_webhook():
 
             first_item = line_items_data[0]
             price_obj = getattr(first_item, "price", None)
-
-            price_id = None
-            if price_obj is not None:
-                price_id = getattr(price_obj, "id", None)
+            price_id = getattr(price_obj, "id", None) if price_obj else None
 
             return PRICE_TO_PLAN.get(price_id)
         except Exception as e:
@@ -557,11 +554,10 @@ def stripe_webhook():
 
     print("EVENT TYPE:", event["type"])
 
-    # 1) Initial checkout success 
+    # 1) Initial checkout success = main upgrade logic
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        # Extra safety logging
         print("Checkout session id:", session.id)
         print("Checkout client_reference_id:", session.client_reference_id)
         print("Stripe metadata:", safe_metadata(session.metadata))
@@ -569,15 +565,12 @@ def stripe_webhook():
         phone = session.client_reference_id
         metadata = safe_metadata(session.metadata)
 
-        # Primary source of truth
         plan = metadata.get("plan")
         phone_from_metadata = metadata.get("phone")
 
-        # Optional fallback: if client_reference_id missing, use metadata phone
         if not phone and phone_from_metadata:
             phone = phone_from_metadata
 
-        # Optional fallback: derive plan from line items if metadata missing  
         if not plan:
             try:
                 line_items = stripe.checkout.Session.list_line_items(session.id, limit=5)
@@ -605,83 +598,26 @@ def stripe_webhook():
         else:
             print("No user found for phone:", phone)
 
-    # 2) Renewal succeeded
+    # 2) Renewal succeeded = log only for now
     elif event["type"] == "invoice.paid":
         invoice = event["data"]["object"]
-
         print("Invoice id:", invoice.id)
         print("Invoice metadata:", safe_metadata(invoice.metadata))
+        print("Invoice paid received.")
+        print("Note: no user update attempted because invoice metadata is empty in your current Stripe flow.")
 
-        metadata = safe_metadata(invoice.metadata)
-        phone = metadata.get("phone")
-        plan = metadata.get("plan")
-
-        # Fallback: look inside invoice lines
-        if (not phone or not plan) and hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
-            try:
-                if invoice.lines.data:
-                    first_line = invoice.lines.data[0]
-                    line_metadata = safe_metadata(first_line.metadata)
-                    print("Invoice line metadata:", line_metadata)
-
-                    if not phone:
-                        phone = line_metadata.get("phone")
-                    if not plan:
-                        plan = line_metadata.get("plan")
-
-                    if not plan:
-                        plan = get_plan_from_line_items(invoice.lines.data)
-            except Exception as e:
-                print("Invoice lines fallback error:", str(e))
-
-        print("Invoice paid:", phone, plan)
-
-        if phone and plan:
-            user = User.query.filter_by(phone_number=phone).first()
-            if user:
-                user.plan = plan
-                db.session.commit()
-                print("User remains active after invoice payment:", user.phone_number, user.plan)
-            else:
-                print("No user found for invoice payment phone:", phone)
-        else:
-            print("Missing phone or plan on invoice.paid event")
-
-    # 3) Renewal failed
+    # 3) Renewal failed = log only for now
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
-
         print("Invoice payment failed id:", invoice.id)
         print("Invoice failed metadata:", safe_metadata(invoice.metadata))
-
-        metadata = safe_metadata(invoice.metadata)
-        phone = metadata.get("phone")
-
-        # Fallback: invoice lines metadata
-        if not phone and hasattr(invoice, "lines") and invoice.lines and hasattr(invoice.lines, "data"):
-            try:
-                if invoice.lines.data:
-                    first_line = invoice.lines.data[0]
-                    line_metadata = safe_metadata(first_line.metadata)
-                    print("Invoice failed line metadata:", line_metadata)
-                    phone = line_metadata.get("phone")
-            except Exception as e:
-                print("Invoice failed lines fallback error:", str(e))
-
-        print("Invoice payment failed for:", phone)
-
-        if phone:
-            user = User.query.filter_by(phone_number=phone).first()
-            if user:
-                print("User payment failure logged:", user.phone_number)
-            else:
-                print("No user found for failed payment phone:", phone)
+        print("Invoice payment failed received.")
 
     # 4) Subscription canceled / ended
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
-
         metadata = safe_metadata(subscription.metadata)
+
         print("Subscription deleted metadata:", metadata)
 
         phone = metadata.get("phone")
@@ -697,6 +633,8 @@ def stripe_webhook():
                 print("User downgraded to free:", user.phone_number)
             else:
                 print("No user found for canceled subscription:", phone)
+        else:
+            print("No phone found on canceled subscription metadata")
 
     return {"status": "success"}, 200
 
