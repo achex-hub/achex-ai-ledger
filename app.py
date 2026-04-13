@@ -251,8 +251,13 @@ def whatsapp_webhook():
 
     if normalized in ["upgrade starter", "upgrade pro"]:
         plan = normalized.split()[1]
-        upgrade_link = generate_upgrade_link(from_number, plan)
-        msg.body(f"Upgrade to {plan.title()} here:\n{upgrade_link}")
+        #upgrade_link = generate_upgrade_link(from_number, plan)
+        starter_link = generate_upgrade_link(from_number, "starter")
+        pro_link = generate_upgrade_link(from_number, "pro")
+        msg.body(f"Upgrade to Starter here:\n{starter_link}"
+                f"Upgrade to Pro here:\n{pro_link}"
+        )
+
         return str(resp)
 
     # HARD PAYWALL
