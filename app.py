@@ -112,7 +112,7 @@ def whatsapp_webhook():
     if normalized in ["summary", "today", "today summary"]:
         summary = get_today_summary(user)
         msg.body(format_summary_message(summary, "Today's Summary"))
-        return str(resp)
+        return str(resp)    
 
     if normalized in ["week", "week summary", "weekly summary"]:
         summary = get_week_summary(user)
@@ -271,12 +271,12 @@ def whatsapp_webhook():
         pro_link = generate_upgrade_link(from_number, "pro")
         msg.body(
             "🚫 You've reached your monthly limit.\n\n"
-            "Upgrade now to continue:\n\n"
-            "Starter - 500 Transactions Monthly\n"
-            f"{starter_link}\n\n"
-            "Pro - Unlimited Transactions\n"
-            f"{pro_link}\n\n"
-            "Takes 10 seconds."
+            "But here's what you're missing:\n"
+            "• Unlimited tracking\n"
+            "• Daily insights\n"
+            "• Profit analysis\n\n"
+            "Upgrade in 10 seconds:\n"
+            f"{starter_link}"
         )
         return str(resp)
 
@@ -405,12 +405,12 @@ def whatsapp_webhook():
 
     # FRIEND INVITE
     invite_line = ""
-    public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
-    if public_number and user.monthly_transaction_count % 5 == 0 and not was_duplicate:
+
+    if user.monthly_transaction_count in [1, 3] or "summary" in normalized:
         invite_line = (
-            "\n\n🔥 You're tracking like a pro.\n"
-            "Invite a friend:\n"
-            f"https://wa.me/{public_number}"
+            "\n\n🔥 You're tracking your business like a pro.\n"
+            "Know someone who needs this?\n"
+            f"Invite them 👉 https://wa.me/{17253292575}"
         )
 
     # DUPLICATE MESSAGE TEXT
