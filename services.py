@@ -22,8 +22,8 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
 PLAN_LIMITS = {
-    "free": 5,       # change this to 12 or 50 when you're done testing
-    "starter": 10,
+    "free": 75,       # change this to 12 or 50 when you're done testing
+    "starter": 500,
     "pro": 9999999,
 }
 
