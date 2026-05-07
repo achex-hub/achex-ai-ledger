@@ -819,6 +819,77 @@ def upgrade_checkout(plan, phone):
         print("Upgrade route error str:", str(e))
         return {"error": str(e)}, 400
 
+@app.route("/admin/dashboard")
+def admin_dashboard():
+    token = request.args.get("token", "").strip()
+
+    if token != os.getenv("ADMIN_REBUILD_TOKEN"):
+        return "Unauthorized", 403
+
+    users = User.query.order_by(User.created_at.desc()).all()
+
+    rows = []
+
+    for user in users:
+        last_txn = Transaction.query.filter_by(user_id=user.id).order_by(
+            Transaction.created_at.desc()
+        ).first()
+
+        rows.append({
+            "phone": user.phone_number,
+            "plan": user.plan,
+            "count": user.monthly_transaction_count,
+            "last_activity": last_txn.created_at.strftime("%Y-%m-%d %H:%M") if last_txn else "No activity",
+            "last_message": last_txn.raw_message if last_txn else "",
+            "high_intent": "YES" if user.monthly_transaction_count >= 3 else "",
+        })
+
+    html = """
+    <html>
+    <head>
+        <title>achex Dashboard</title>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 30px; background: #111; color: #fff; }
+            h1 { color: #ff641d; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { padding: 12px; border-bottom: 1px solid #333; text-align: left; }
+            th { background: #222; color: #ff641d; }
+            tr:hover { background: #1b1b1b; }
+            .badge { color: #00ff88; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <h1>achex AI Ledger Dashboard</h1>
+        <table>
+            <tr>
+                <th>Phone</th>
+                <th>Plan</th>
+                <th>Monthly Count</th>
+                <th>Last Activity</th>
+                <th>Last Message</th>
+                <th>High Intent</th>
+            </tr>
+    """
+
+    for row in rows:
+        html += f"""
+            <tr>
+                <td>{row["phone"]}</td>
+                <td>{row["plan"]}</td>
+                <td>{row["count"]}</td>
+                <td>{row["last_activity"]}</td>
+                <td>{row["last_message"]}</td>
+                <td class="badge">{row["high_intent"]}</td>
+            </tr>
+        """
+
+    html += """
+        </table>
+    </body>
+    </html>
+    """
+
+    return html
 
 @app.route("/exports/<filename>")
 def download_export(filename):
