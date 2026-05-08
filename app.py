@@ -158,15 +158,6 @@ def whatsapp_webhook():
         summary = get_summary_for_range(user, start_dt, end_dt)
         label = f"Summary: {start_dt.date()} to {(end_dt - timedelta(days=1)).date()}"
         msg.body(format_summary_message(summary, label))
-        return str(resp)
-
-    if not was_duplicate and user.monthly_transaction_count in [2, 3] or "summary" in normalized:
-        msg.body(
-            "🚀 You're already using this like a pro.\n\n"
-            "Most people upgrade here to remove limits\n"
-            "and keep everything running smoothly.\n\n"
-            f"{generate_upgrade_link(from_number, 'starter')}"
-        )
         return str(resp)    
 
     # EXPORTS
@@ -430,6 +421,19 @@ def whatsapp_webhook():
             "You’ll see exactly how much you made today."
         )
 
+    sales_upsell_text = ""
+
+    if (
+        not was_duplicate
+        and user.plan == "free"
+        and user.monthly_transaction_count in [2, 3]
+    ):
+        sales_upsell_text = (
+            "\n\n🚀 You're using this like a pro.\n\n"
+            "Upgrade to remove limits and unlock insights:\n"
+            f"{generate_upgrade_link(from_number, 'starter')}"
+        )
+        
     # FRIEND INVITE
     invite_line = ""
     public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
