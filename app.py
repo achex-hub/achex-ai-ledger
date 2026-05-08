@@ -580,15 +580,27 @@ def send_daily_reminders():
     users = User.query.filter(User.plan.in_(["free", "starter", "pro"])).all()
 
     sent = []
+    failed = []
 
     for user in users:
-        send_whatsapp(
-            user.phone_number,
-            "📊 Don't forget to track today's sales.\n\nTry:\nSold coffee 10"
-        )
-        sent.append(user.phone_number)
+        try:
+            send_whatsapp(
+                user.phone_number,
+                "📊 Don't forget to track today's sales.\n\nTry:\nSold coffee 10"
+            )
+            sent.append(user.phone_number)
 
-    return {"sent": sent}
+        except Exception as e:
+            print("Daily reminder failed:", user.phone_number, str(e))
+            failed.append({
+                "phone": user.phone_number,
+                "error": str(e)
+            })
+
+    return {
+        "sent": sent,
+        "failed": failed
+    }
 
 
 @app.route("/admin/reset-count", methods=["GET"])
@@ -633,7 +645,7 @@ def add_last_active_column():
 
     return {"message": "last_active_at column added"}
 
-    
+
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
