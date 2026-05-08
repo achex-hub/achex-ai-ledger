@@ -160,7 +160,7 @@ def whatsapp_webhook():
         msg.body(format_summary_message(summary, label))
         return str(resp)
 
-    if user.monthly_transaction_count == 1:
+    if not was_duplicate and user.monthly_transaction_count == 1:
         msg.body(
             "🔥 You're now tracking your business.\n\n"
             "Try typing:\n"
