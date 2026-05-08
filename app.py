@@ -160,7 +160,7 @@ def whatsapp_webhook():
         msg.body(format_summary_message(summary, label))
         return str(resp)
 
-    if user.monthly_transaction_count in [2, 3] or "summary" in normalized:
+    if not was_duplicate and user.monthly_transaction_count in [2, 3] or "summary" in normalized:
         msg.body(
             "🚀 You're already using this like a pro.\n\n"
             "Most people upgrade here to remove limits\n"
