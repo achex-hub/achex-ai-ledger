@@ -160,7 +160,7 @@ def whatsapp_webhook():
         msg.body(format_summary_message(summary, label))
         return str(resp)
 
-    if not was_duplicate and user.monthly_transaction_count == 1:
+    if user.monthly_transaction_count == 1:
         msg.body(
             "🔥 You're now tracking your business.\n\n"
             "Try typing:\n"
@@ -428,23 +428,26 @@ def whatsapp_webhook():
         user, parsed, incoming_message, message_sid
     )
 
-    # AUTO-CLOSE TRIGER
-    if not was_duplicate and user.plan == "free" and user.monthly_transaction_count == 3:
-        msg.body(
-            "🚀 You're already using this like a pro.\n\n"
-            "Upgrade to remove limits and unlock insights:\n"
-            f"{generate_upgrade_link(from_number, 'starter')}"
+    # FIRST SUCCESS MOMENT
+    first_success_text = ""
+
+    if not was_duplicate and user.monthly_transaction_count == 1:
+        first_success_text = (
+            "\n\n🔥 You're now tracking your business.\n\n"
+            "Try typing:\n"
+            "summary\n\n"
+            "You’ll see exactly how much you made today."
         )
-        return str(resp)
 
     # FRIEND INVITE
     invite_line = ""
+    public_number = os.getenv("PUBLIC_WHATSAPP_NUMBER", "17253292575")
 
-    if user.monthly_transaction_count in [1, 3] or "summary" in normalized:
+    if public_number and user.monthly_transaction_count % 5 == 0 and not was_duplicate:
         invite_line = (
-            "\n\n🔥 You're tracking your business like a pro.\n"
-            "Know someone who needs this?\n"
-            f"Invite them 👉 https://wa.me/{17253292575}"
+            "\n\n🔥 You're tracking like a pro.\n"
+            "Invite a friend:\n"
+            f"https://wa.me/{public_number}"
         )
 
     # DUPLICATE MESSAGE TEXT
@@ -459,6 +462,7 @@ def whatsapp_webhook():
         f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
         "You're tracking your business in real time."
         + duplicate_note
+        + first_success_text
         + soft_upsell_text
         + invite_line
     )
