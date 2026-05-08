@@ -160,15 +160,6 @@ def whatsapp_webhook():
         msg.body(format_summary_message(summary, label))
         return str(resp)
 
-    if user.monthly_transaction_count == 1:
-        msg.body(
-            "🔥 You're now tracking your business.\n\n"
-            "Try typing:\n"
-            "summary\n\n"
-            "You’ll see exactly how much you made today."
-        )
-        return str(resp)
-
     if user.monthly_transaction_count in [2, 3] or "summary" in normalized:
         msg.body(
             "🚀 You're already using this like a pro.\n\n"
