@@ -119,7 +119,6 @@ def whatsapp_webhook():
         "\n\n📊 This is your business in real time."
         "\n\n🚀 Unlock full tracking + insights:\n"
         f"{generate_upgrade_link(from_number, 'starter')}"
-        )
         return str(resp)    
 
     if normalized in ["week", "week summary", "weekly summary"]:
