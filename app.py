@@ -619,6 +619,21 @@ def reset_count():
     }
 
 
+@app.route("/admin/add-last-active-column")
+def add_last_active_column():
+    token = request.args.get("token", "").strip()
+
+    if token != os.getenv("ADMIN_REBUILD_TOKEN"):
+        return {"error": "unauthorized"}, 403
+
+    with db.engine.begin() as conn:
+        conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP WITH TIME ZONE;"
+        )
+
+    return {"message": "last_active_at column added"}
+
+    
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
