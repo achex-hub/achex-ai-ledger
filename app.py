@@ -32,6 +32,8 @@ from services import (
     is_premium, 
     generate_insight,
     send_whatsapp,
+    detect_language,
+    t,
 )
 
 app = Flask(__name__)
@@ -104,6 +106,8 @@ def whatsapp_webhook():
 
     normalized = normalize_text(incoming_message)
 
+    lang = detect_language(incoming_message)
+
     print("Current user plan:", user.plan)
     print("Current monthly count:", user.monthly_transaction_count)
 
@@ -113,7 +117,12 @@ def whatsapp_webhook():
         return str(resp)
 
     # SUMMARIES
-    if normalized in ["summary", "today", "today summary"]:
+    if normalized in [
+        "summary", "today", "today summary",
+        "resumen", "hoy",
+        "résumé", "resume", "aujourd'hui",
+        "ملخص", "اليوم"
+    ]:
         summary = get_today_summary(user)
         msg.body(format_summary_message(summary, "Today's Summary"))
         "\n\n📊 This is your business in real time."
@@ -446,16 +455,16 @@ def whatsapp_webhook():
         )
 
     # DUPLICATE MESSAGE TEXT
-    status_prefix = "Recorded"
+    status_prefix = t(lang, "recorded")
     duplicate_note = ""
 
     if was_duplicate:
-        status_prefix = "Already recorded"
-        duplicate_note = "\n\nThis message was already processed."
+        status_prefix = t(lang, "already_recorded")
+        duplicate_note = "\n\n" + t(lang, "duplicate")
 
     msg.body(
         f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
-        "You're tracking your business in real time."
+        t(lang, "tracking")
         + duplicate_note
         + first_success_text
         + soft_upsell_text

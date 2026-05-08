@@ -122,6 +122,15 @@ Return valid JSON only with this schema:
 }}
 
 Rules:
+The user may write in any language. Understand the meaning and return the JSON fields in English.
+
+Examples:
+- "Vendí café 10" = income, item coffee, total 10
+- "Compré leche 5" = expense, item milk, total 5
+- "J'ai vendu du café 10" = income, item coffee, total 10
+- "J'ai acheté du lait 5" = expense, item milk, total 5
+- "بعت قهوة 10" = income, item coffee, total 10
+- "اشتريت حليب 5" = expense, item milk, total 5
 - If the user indicates a sale, it is income.
 - If the user indicates a purchase, cost, expense, or payment, it is expense.
 - If quantity is not stated, use 1.
@@ -772,3 +781,52 @@ Business data:
         fallback_lines.append("Next step: focus on selling more of your strongest item and controlling your top expense.")
 
         return "\n".join(fallback_lines)
+
+
+def detect_language(text: str) -> str:
+    text = (text or "").lower()
+
+    if any("\u0600" <= c <= "\u06FF" for c in text):
+        return "ar"
+
+    spanish_words = ["vendí", "vendi", "compré", "compre", "resumen", "hoy", "gasto"]
+    french_words = ["vendu", "acheté", "achete", "résumé", "resume", "aujourd"]
+
+    if any(word in text for word in spanish_words):
+        return "es"
+
+    if any(word in text for word in french_words):
+        return "fr"
+
+    return "en"
+
+
+def t(lang: str, key: str) -> str:
+    messages = {
+        "en": {
+            "recorded": "Recorded",
+            "already_recorded": "Already recorded",
+            "tracking": "You're tracking your business in real time.",
+            "duplicate": "This message was already processed.",
+        },
+        "es": {
+            "recorded": "Registrado",
+            "already_recorded": "Ya registrado",
+            "tracking": "Estás controlando tu negocio en tiempo real.",
+            "duplicate": "Este mensaje ya fue procesado.",
+        },
+        "fr": {
+            "recorded": "Enregistré",
+            "already_recorded": "Déjà enregistré",
+            "tracking": "Vous suivez votre activité en temps réel.",
+            "duplicate": "Ce message a déjà été traité.",
+        },
+        "ar": {
+            "recorded": "تم التسجيل",
+            "already_recorded": "تم تسجيله مسبقًا",
+            "tracking": "أنت تتابع عملك في الوقت الحقيقي.",
+            "duplicate": "تمت معالجة هذه الرسالة من قبل.",
+        },
+    }
+
+    return messages.get(lang, messages["en"]).get(key, key)        
