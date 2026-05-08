@@ -115,7 +115,7 @@ def whatsapp_webhook():
     # SUMMARIES
     if normalized in ["summary", "today", "today summary"]:
         summary = get_today_summary(user)
-        msg.body(format_summary_message(summary, "Today's Summary")
+        msg.body(format_summary_message(summary, "Today's Summary"))
         "\n\n📊 This is your business in real time."
         "\n\n🚀 Unlock full tracking + insights:\n"
         f"{generate_upgrade_link(from_number, 'starter')}"
