@@ -472,8 +472,11 @@ def send_whatsapp(to, text):
 
     from_number = os.getenv("TWILIO_WHATSAPP_NUMBER", "17253292575")
 
+    if not from_number.startswith("+"):
+        from_number = "+" + from_number
+
     client.messages.create(
-        from_=f"whatsapp:+{from_number}",
+        from_=f"whatsapp:{from_number}",
         to=to,
         body=text
     )

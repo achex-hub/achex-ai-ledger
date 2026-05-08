@@ -28,7 +28,7 @@ from services import (
     reset_monthly_usage_if_needed,
     save_transaction,
     user_can_add_transaction,
-    get_daily_summary, 
+    get_daily_summary,
     is_premium, 
     generate_insight,
     send_whatsapp,
@@ -590,7 +590,7 @@ def send_daily_reminders():
         sent.append(user.phone_number)
 
     return {"sent": sent}
-    
+
 
 @app.route("/admin/reset-count", methods=["GET"])
 def reset_count():
