@@ -461,6 +461,24 @@ def help_message() -> str:
     )
 
 
+def send_whatsapp(to, text):
+    from twilio.rest import Client
+    import os
+
+    client = Client(
+        os.getenv("TWILIO_ACCOUNT_SID"),
+        os.getenv("TWILIO_AUTH_TOKEN")
+    )
+
+    from_number = os.getenv("TWILIO_WHATSAPP_NUMBER", "17253292575")
+
+    client.messages.create(
+        from_=f"whatsapp:+{from_number}",
+        to=to,
+        body=text
+    )
+
+
 def export_transactions_csv(user: User, start_dt: datetime, end_dt: datetime) -> str:
     transactions = get_transactions_for_range(user, start_dt, end_dt)
 

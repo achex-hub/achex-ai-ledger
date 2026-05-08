@@ -22,6 +22,7 @@ class User(db.Model):
     stripe_customer_id = db.Column(db.String(255), nullable=True, unique=True, index=True)
     stripe_subscription_id = db.Column(db.String(255), nullable=True, unique=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    last_active_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 class Transaction(db.Model):

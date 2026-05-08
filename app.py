@@ -31,6 +31,7 @@ from services import (
     get_daily_summary, 
     is_premium, 
     generate_insight,
+    send_whatsapp,
 )
 
 app = Flask(__name__)
@@ -98,6 +99,9 @@ def whatsapp_webhook():
     user = get_or_create_user(from_number)
     reset_monthly_usage_if_needed(user)
 
+    user.last_active_at = datetime.now(timezone.utc)
+    db.session.commit()
+
     normalized = normalize_text(incoming_message)
 
     print("Current user plan:", user.plan)
@@ -111,7 +115,11 @@ def whatsapp_webhook():
     # SUMMARIES
     if normalized in ["summary", "today", "today summary"]:
         summary = get_today_summary(user)
-        msg.body(format_summary_message(summary, "Today's Summary"))
+        msg.body(format_summary_message(summary, "Today's Summary")
+        "\n\n📊 This is your business in real time."
+        "\n\n🚀 Unlock full tracking + insights:\n"
+        f"{generate_upgrade_link(from_number, 'starter')}"
+        )
         return str(resp)    
 
     if normalized in ["week", "week summary", "weekly summary"]:
@@ -152,6 +160,24 @@ def whatsapp_webhook():
         label = f"Summary: {start_dt.date()} to {(end_dt - timedelta(days=1)).date()}"
         msg.body(format_summary_message(summary, label))
         return str(resp)
+
+    if user.monthly_transaction_count == 1:
+        msg.body(
+            "🔥 You're now tracking your business.\n\n"
+            "Try typing:\n"
+            "summary\n\n"
+            "You’ll see exactly how much you made today."
+        )
+        return str(resp)
+
+    if user.monthly_transaction_count in [2, 3] or "summary" in normalized:
+        msg.body(
+            "🚀 You're already using this like a pro.\n\n"
+            "Most people upgrade here to remove limits\n"
+            "and keep everything running smoothly.\n\n"
+            f"{generate_upgrade_link(from_number, 'starter')}"
+        )
+        return str(resp)    
 
     # EXPORTS
     export_result = parse_export_command(incoming_message)
@@ -403,6 +429,15 @@ def whatsapp_webhook():
         user, parsed, incoming_message, message_sid
     )
 
+    # AUTO-CLOSE TRIGER
+    if not was_duplicate and user.plan == "free" and user.monthly_transaction_count == 3:
+        msg.body(
+            "🚀 You're already using this like a pro.\n\n"
+            "Upgrade to remove limits and unlock insights:\n"
+            f"{generate_upgrade_link(from_number, 'starter')}"
+        )
+        return str(resp)
+
     # FRIEND INVITE
     invite_line = ""
 
@@ -496,6 +531,66 @@ def set_plan():
         "plan": user.plan
     }
 
+
+@app.route("/admin/run-followups")
+def run_followups():
+    token = request.args.get("token", "").strip()
+
+    if token != os.getenv("ADMIN_REBUILD_TOKEN"):
+        return {"error": "unauthorized"}, 403
+
+    now = datetime.now(timezone.utc)
+    users = User.query.filter_by(plan="free").all()
+
+    sent = []
+
+    for user in users:
+        if not user.last_active_at:
+            continue
+
+        last_active = user.last_active_at
+        if last_active.tzinfo is None:
+            last_active = last_active.replace(tzinfo=timezone.utc)
+
+        hours_since = (now - last_active).total_seconds() / 3600
+
+        if 6 <= hours_since < 7:
+            send_whatsapp(
+                user.phone_number,
+                "Quick tip:\nType 'summary' to see your numbers 📊"
+            )
+            sent.append(user.phone_number)
+
+        if 24 <= hours_since < 25:
+            send_whatsapp(
+                user.phone_number,
+                "If you're using this daily, upgrade to remove limits and unlock insights 🚀"
+            )
+            sent.append(user.phone_number)
+
+    return {"sent": sent}
+
+
+@app.route("/admin/send-daily-reminders")
+def send_daily_reminders():
+    token = request.args.get("token", "").strip()
+
+    if token != os.getenv("ADMIN_REBUILD_TOKEN"):
+        return {"error": "unauthorized"}, 403
+
+    users = User.query.filter(User.plan.in_(["free", "starter", "pro"])).all()
+
+    sent = []
+
+    for user in users:
+        send_whatsapp(
+            user.phone_number,
+            "📊 Don't forget to track today's sales.\n\nTry:\nSold coffee 10"
+        )
+        sent.append(user.phone_number)
+
+    return {"sent": sent}
+    
 
 @app.route("/admin/reset-count", methods=["GET"])
 def reset_count():
