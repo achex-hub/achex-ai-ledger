@@ -265,15 +265,15 @@ def save_transaction(user, parsed, raw_message, twilio_message_sid=None):
             }
         )
 
-        if (
-            seconds_apart <= 5
-            and same_message
-            and same_type
-            and same_item
-            and same_total
-        ):
-            print("Duplicate detected (exact same message within 5s)")
-            return recent_txn, True
+       # if (
+         #   seconds_apart <= 5
+          # and same_message
+          # and same_type
+          # and same_item
+          # and same_total 
+        #):
+         #  print("Duplicate detected (exact same message within 5s)")
+         #  return recent_txn, True
 
     transaction = Transaction(
         user_id=user.id,
