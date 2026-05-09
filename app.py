@@ -463,11 +463,12 @@ def whatsapp_webhook():
         duplicate_note = "\n\n" + t(lang, "duplicate")
 
     msg.body(
-        f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n",
-        t(lang, "tracking")
+        f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
+        + t(lang, "tracking")
         + duplicate_note
         + first_success_text
         + soft_upsell_text
+        + sales_upsell_text
         + invite_line
     )
     return str(resp)
