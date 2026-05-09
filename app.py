@@ -34,6 +34,9 @@ from services import (
     send_whatsapp,
     detect_language,
     t,
+    localize_transaction_type,
+    localize_item_name,
+
 )
 
 app = Flask(__name__)
@@ -347,13 +350,16 @@ def whatsapp_webhook():
                 user, parsed, line, line_sid
             )
 
+            localized_type = localize_transaction_type(transaction.type, lang)
+            localized_item = localize_item_name(transaction.item, lang)
+
             if was_duplicate:
                 recorded_lines.append(
-                    f"- Already recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}"
+                    f"- {t(lang, 'already_recorded')}: {localized_type} — {localized_item} — ${transaction.total:.2f}"
                 )
             else:
                 recorded_lines.append(
-                    f"- Recorded: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}"
+                    f"- {t(lang, 'recorded')}: {localized_type} — {localized_item} — ${transaction.total:.2f}"
                 )
                 total_recorded += float(transaction.total or 0)
 
@@ -461,17 +467,19 @@ def whatsapp_webhook():
     if was_duplicate:
         status_prefix = t(lang, "already_recorded")
         duplicate_note = "\n\n" + t(lang, "duplicate")
+        localized_type = localize_transaction_type(transaction.type, lang)
+        localized_item = localize_item_name(transaction.item, lang)
 
-    msg.body(
-        f"{status_prefix}: {transaction.type.title()} — {transaction.item.title()} — ${transaction.total:.2f}\n\n"
-        + t(lang, "tracking")
-        + duplicate_note
-        + first_success_text
-        + soft_upsell_text
-        + sales_upsell_text
-        + invite_line
-    )
-    return str(resp)
+        msg.body(
+            f"{status_prefix}: {localized_type} — {localized_item} — ${transaction.total:.2f}\n\n"
+            + t(lang, "tracking")
+            + duplicate_note
+            + first_success_text
+            + soft_upsell_text
+            + sales_upsell_text
+            + invite_line
+        )
+        return str(resp)
 
 
 @app.route("/pricing")

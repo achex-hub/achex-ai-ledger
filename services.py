@@ -840,4 +840,76 @@ def t(lang: str, key: str) -> str:
         },
     }
 
-    return messages.get(lang, messages["en"]).get(key, key)        
+    return messages.get(lang, messages["en"]).get(key, key)
+
+
+def localize_transaction_type(transaction_type: str, lang: str) -> str:
+    labels = {
+        "en": {
+            "income": "Income",
+            "expense": "Expense",
+        },
+        "es": {
+            "income": "Ingreso",
+            "expense": "Gasto",
+        },
+        "fr": {
+            "income": "Revenu",
+            "expense": "Dépense",
+        },
+        "ar": {
+            "income": "دخل",
+            "expense": "مصروف",
+        },
+    }
+
+    transaction_type = (transaction_type or "").lower()
+    return labels.get(lang, labels["en"]).get(transaction_type, transaction_type.title())
+
+
+def localize_item_name(item: str, lang: str) -> str:
+    items = {
+        "coffee": {
+            "en": "Coffee",
+            "es": "Café",
+            "fr": "Café",
+            "ar": "قهوة",
+        },
+        "milk": {
+            "en": "Milk",
+            "es": "Leche",
+            "fr": "Lait",
+            "ar": "حليب",
+        },
+        "tea": {
+            "en": "Tea",
+            "es": "Té",
+            "fr": "Thé",
+            "ar": "شاي",
+        },
+        "soda": {
+            "en": "Soda",
+            "es": "Soda",
+            "fr": "Soda",
+            "ar": "صودا",
+        },
+        "water": {
+            "en": "Water",
+            "es": "Agua",
+            "fr": "Eau",
+            "ar": "ماء",
+        },
+        "sugar": {
+            "en": "Sugar",
+            "es": "Azúcar",
+            "fr": "Sucre",
+            "ar": "سكر",
+        },
+    }
+
+    clean_item = (item or "").strip().lower()
+
+    if clean_item in items:
+        return items[clean_item].get(lang, items[clean_item]["en"])
+
+    return item.title()
