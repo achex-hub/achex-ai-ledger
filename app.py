@@ -460,26 +460,28 @@ def whatsapp_webhook():
             f"https://wa.me/{public_number}"
         )
 
-    # DUPLICATE MESSAGE TEXT
+        # DUPLICATE MESSAGE TEXT
     status_prefix = t(lang, "recorded")
     duplicate_note = ""
 
     if was_duplicate:
         status_prefix = t(lang, "already_recorded")
         duplicate_note = "\n\n" + t(lang, "duplicate")
-        localized_type = localize_transaction_type(transaction.type, lang)
-        localized_item = localize_item_name(transaction.item, lang)
 
-        msg.body(
-            f"{status_prefix}: {localized_type} — {localized_item} — ${transaction.total:.2f}\n\n"
-            + t(lang, "tracking")
-            + duplicate_note
-            + first_success_text
-            + soft_upsell_text
-            + sales_upsell_text
-            + invite_line
-        )
-        return str(resp)
+    localized_type = localize_transaction_type(transaction.type, lang)
+    localized_item = localize_item_name(transaction.item, lang)
+
+    msg.body(
+        f"{status_prefix}: {localized_type} — {localized_item} — ${transaction.total:.2f}\n\n"
+        + t(lang, "tracking")
+        + duplicate_note
+        + first_success_text
+        + soft_upsell_text
+        + sales_upsell_text
+        + invite_line
+    )
+
+    return str(resp)
 
 
 @app.route("/pricing")
