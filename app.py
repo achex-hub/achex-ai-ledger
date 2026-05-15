@@ -444,9 +444,9 @@ def whatsapp_webhook():
         and user.monthly_transaction_count in [2, 3]
     ):
         sales_upsell_text = (
-            "\n\n🚀 You're using this like a pro.\n\n"
-            "Upgrade to remove limits and unlock insights:\n"
-            f"{generate_upgrade_link(from_number, 'starter')}"
+            "\n\n"
+            + t(lang, "pro_upsell")
+            + generate_upgrade_link(from_number, "starter")
         )
         
     # FRIEND INVITE

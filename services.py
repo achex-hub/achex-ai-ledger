@@ -800,6 +800,9 @@ def detect_language(text: str) -> str:
     if any("\u0600" <= c <= "\u06FF" for c in raw):
         return "ar"
 
+    if any("\u1200" <= c <= "\u137F" for c in text):
+        return "am"    
+
     spanish_words = ["vendi", "compre", "resumen", "hoy", "gasto"]
     french_words = ["vendu", "achete", "resume", "aujourd", "j'ai"]
 
@@ -807,7 +810,7 @@ def detect_language(text: str) -> str:
         return "es"
 
     if any(word in normalized for word in french_words):
-        return "fr"
+        return "fr"    
 
     return "en"
 
@@ -838,6 +841,12 @@ def t(lang: str, key: str) -> str:
             "tracking": "أنت تتابع عملك في الوقت الحقيقي.",
             "duplicate": "تمت معالجة هذه الرسالة من قبل.",
         },
+        "am": {
+            "recorded": "ተመዝግቧል",
+            "already_recorded": "አስቀድሞ ተመዝግቧል",
+            "tracking": "ንግድዎን በቅጽበት እየተከታተሉ ነው።",
+            "duplicate": "ይህ መልዕክት ድግግሞሽ ነው።",
+        },
     }
 
     return messages.get(lang, messages["en"]).get(key, key)
@@ -861,6 +870,10 @@ def localize_transaction_type(transaction_type: str, lang: str) -> str:
             "income": "دخل",
             "expense": "مصروف",
         },
+        "am": {
+            "income": "ገቢ",
+            "expense": "ወጪ",
+        },
     }
 
     transaction_type = (transaction_type or "").lower()
@@ -874,36 +887,42 @@ def localize_item_name(item: str, lang: str) -> str:
             "es": "Café",
             "fr": "Café",
             "ar": "قهوة",
+            "am": "ቡና",
         },
         "milk": {
             "en": "Milk",
             "es": "Leche",
             "fr": "Lait",
             "ar": "حليب",
+            "am": "ወተት",
         },
         "tea": {
             "en": "Tea",
             "es": "Té",
             "fr": "Thé",
             "ar": "شاي",
+            "am": "ሻይ",
         },
         "soda": {
             "en": "Soda",
             "es": "Soda",
             "fr": "Soda",
             "ar": "صودا",
+            "am": "ለስላሳ",
         },
         "water": {
             "en": "Water",
             "es": "Agua",
             "fr": "Eau",
             "ar": "ماء",
+            "am": "ውሃ",
         },
         "sugar": {
             "en": "Sugar",
             "es": "Azúcar",
             "fr": "Sucre",
             "ar": "سكر",
+            "am": "ስኳር",
         },
     }
 
