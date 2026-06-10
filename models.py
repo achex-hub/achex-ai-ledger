@@ -12,32 +12,43 @@ class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
+
     phone_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    email = db.Column(db.String(255), nullable=True)
-    name = db.Column(db.String(255), nullable=True)
+    email = db.Column(db.String(255), nullable=True, index=True)
+    name = db.Column(db.String(120), nullable=True)
+
     plan = db.Column(db.String(50), default="free", nullable=False)
     status = db.Column(db.String(50), default="active", nullable=False)
+
     monthly_transaction_count = db.Column(db.Integer, default=0, nullable=False)
     last_reset_date = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_active_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     stripe_customer_id = db.Column(db.String(255), nullable=True, unique=True, index=True)
     stripe_subscription_id = db.Column(db.String(255), nullable=True, unique=True, index=True)
+
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    last_active_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 class Transaction(db.Model):
     __tablename__ = "transactions"
 
     id = db.Column(db.Integer, primary_key=True)
+
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+
     type = db.Column(db.String(20), nullable=False)
     item = db.Column(db.String(255), nullable=False)
+
     quantity = db.Column(db.Float, default=1, nullable=False)
     unit_price = db.Column(db.Float, default=0, nullable=False)
     total = db.Column(db.Float, nullable=False)
-    currency = db.Column(db.String(10), default="USD", nullable=False)
+
+    currency = db.Column(db.String(10), default="ETB", nullable=False)
     raw_message = db.Column(db.Text, nullable=False)
-    twilio_message_sid = db.Column(db.String(64), unique=True, nullable=True, index=True)
+
+    twilio_message_sid = db.Column(db.String(255), nullable=True, unique=True, index=True)
+
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
 
 def reset_monthly_usage_if_needed(user: User):
